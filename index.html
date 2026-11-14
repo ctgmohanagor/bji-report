@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="bn">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BJI Report · লগইন পরীক্ষা</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#f4f7f6;--card:#fff;--ink:#1f2a28;--muted:#5d6f6a;--line:#d9e4e0;--accent:#0f6e56;--accent-ink:#fff;--warn:#8a4b0b;--warn-bg:#fdf3e4;--ok-bg:#e8f5ef}
+  @media (prefers-color-scheme:dark){:root{--bg:#121816;--card:#1b2320;--ink:#e6ece9;--muted:#9fb1ab;--line:#2c3834;--accent:#3bb08c;--accent-ink:#0b1310;--warn:#f0c27a;--warn-bg:#2d2416;--ok-bg:#16291f}}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:'Noto Sans Bengali',system-ui,sans-serif;line-height:1.6}
+  main{max-width:560px;margin:0 auto;padding:24px 16px 48px}
+  h1{font-size:22px;margin:0 0 4px;font-weight:600}
+  .sub{color:var(--muted);margin:0 0 20px;font-size:14px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px;margin-bottom:14px}
+  button{font:inherit;cursor:pointer;border-radius:8px;padding:11px 16px;border:1px solid var(--line);background:var(--card);color:var(--ink)}
+  button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);width:100%;font-weight:600}
+  .row{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);font-size:15px}
+  .row:last-child{border-bottom:0}
+  .muted{color:var(--muted);font-size:14px}
+  .msg{border-radius:8px;padding:10px 12px;font-size:14px;margin-bottom:14px}
+  .msg.warn{background:var(--warn-bg);color:var(--warn)}
+  .msg.ok{background:var(--ok-bg)}
+  code{font-size:13px}
+  h2{font-size:16px;margin:0 0 8px;font-weight:600}
+</style>
+</head>
+<body>
+<main>
+  <h1>BJI Report</h1>
+  <p class="sub">পরীক্ষামূলক সংস্করণ · শুধু লগইন ও প্রবেশাধিকার যাচাই</p>
+  <div id="msg"></div>
+  <div id="app"><div class="card muted">লোড হচ্ছে…</div></div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script>
+  // staging প্রজেক্ট। publishable key প্রকাশ্য চাবি; নিরাপত্তা আসে ডেটাবেসের নিয়ম (RLS) থেকে।
+  const SUPABASE_URL = 'https://eulieycutgrhifqlnglr.supabase.co';
+  const SUPABASE_KEY = 'sb_publishable_UWaOz95iBLJAnApNTaZIqw_J40_23Bq';
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  const LEVEL = {M:'মহানগর', T:'থানা', W:'ওয়ার্ড', U:'ইউনিট'};
+  const ROLE  = {admin:'অ্যাডমিন', president:'সভাপতি', secretary:'সেক্রেটারি'};
+  const $app = document.getElementById('app'), $msg = document.getElementById('msg');
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const showMsg = (text, kind='warn') => { $msg.innerHTML = text ? `<div class="msg ${kind}">${esc(text)}</div>` : ''; };
+
+  async function login(){
+    showMsg('');
+    const { error } = await sb.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: location.origin + location.pathname, queryParams: { prompt: 'select_account' } }
+    });
+    if (error) showMsg('লগইন শুরু করা যায়নি: ' + error.message);
+  }
+  async function logout(){ await sb.auth.signOut(); render(); }
+
+  async function render(){
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session){
+      $app.innerHTML = `<div class="card">
+          <p style="margin-top:0">নিজের Gmail দিয়ে ঢুকুন।</p>
+          <button class="primary" id="loginBtn">Google দিয়ে লগইন</button>
+          <p class="muted" style="margin-bottom:0">Google যদি বলে "Google hasn't verified this app", তাহলে <b>Continue</b> চাপুন। অ্যাপটি এখন পরীক্ষামূলক অবস্থায় আছে।</p>
+        </div>`;
+      document.getElementById('loginBtn').onclick = login;
+      return;
+    }
+    const user = session.user;
+    const [mem, orgs] = await Promise.all([
+      sb.from('memberships').select('role, active, started_at, orgs(code, name, level)').eq('user_id', user.id).eq('active', true),
+      sb.from('orgs').select('code, name, level, active').order('path')
+    ]);
+    if (mem.error || orgs.error) showMsg('তথ্য আনতে সমস্যা: ' + (mem.error || orgs.error).message);
+
+    const memRows = (mem.data || []).map(m =>
+      `<div class="row"><span>${esc(LEVEL[m.orgs?.level] || '')}: ${esc(m.orgs?.name)} <code>${esc(m.orgs?.code)}</code></span><b>${esc(ROLE[m.role] || m.role)}</b></div>`).join('');
+    const orgRows = (orgs.data || []).map(o =>
+      `<div class="row"><span>${esc(o.name)} <code>${esc(o.code)}</code></span><span class="muted">${esc(LEVEL[o.level])}${o.active ? '' : ' · নিষ্ক্রিয়'}</span></div>`).join('');
+
+    if (!memRows) showMsg('আপনি লগইন করেছেন, কিন্তু এখনো কোনো সংগঠনের দায়িত্বে নেই। তাই কিছুই দেখা যাবে না। এটাই প্রত্যাশিত নিরাপত্তা।');
+    else showMsg('লগইন সফল।', 'ok');
+
+    $app.innerHTML = `
+      <div class="card">
+        <h2>আপনি</h2>
+        <div class="row"><span>নাম</span><b>${esc(user.user_metadata?.full_name || user.user_metadata?.name || '—')}</b></div>
+        <div class="row"><span>ইমেইল</span><b>${esc(user.email)}</b></div>
+      </div>
+      <div class="card"><h2>আপনার দায়িত্ব</h2>${memRows || '<p class="muted" style="margin:0">কোনো দায়িত্ব নেই</p>'}</div>
+      <div class="card"><h2>আপনি যে সংগঠনগুলো দেখতে পান</h2>${orgRows || '<p class="muted" style="margin:0">কোনোটি নয়</p>'}</div>
+      <button id="logoutBtn">লগআউট</button>`;
+    document.getElementById('logoutBtn').onclick = logout;
+  }
+
+  sb.auth.onAuthStateChange(() => render());
+  render();
+</script>
+</body>
+</html>
