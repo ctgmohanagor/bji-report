@@ -228,6 +228,19 @@
       <p class="muted" style="margin-bottom:0">Google যদি বলে "Google hasn't verified this app", তাহলে <b>Continue</b> চাপুন। অ্যাপটি এখন পরীক্ষামূলক অবস্থায় আছে।</p></div>`;
   }
 
+  function drawInvite(user) {
+    $user.innerHTML = '';
+    $app.innerHTML = `<div class="card"><h2>নিমন্ত্রণ গ্রহণ</h2>
+      <p style="margin-top:0">আপনি এখন এই Gmail দিয়ে লগইন করা আছেন:</p>
+      <p><b>${esc(user.email)}</b></p>
+      <p class="muted">যাকে নিমন্ত্রণ করা হয়েছে, তিনি এই Gmail এর মালিক হলে "গ্রহণ করুন" চাপুন। অন্য কারো অ্যাকাউন্ট হলে "অন্য Gmail দিয়ে ঢুকুন" চাপুন। নিমন্ত্রণ-লিংক একবারই ব্যবহার করা যায়।</p>
+      <div class="actions">
+        <button class="primary" data-act="acceptInvite">গ্রহণ করুন</button>
+        <button data-act="switchAccount">অন্য Gmail দিয়ে ঢুকুন</button>
+        <button data-act="dismissInvite">বাতিল</button>
+      </div></div>`;
+  }
+
   // ---- মূল চক্র: সারিবদ্ধ, watchdog সহ ----
   let busy = false, again = false;
   async function refresh() {
@@ -237,13 +250,8 @@
     try {
       const { data: { session } } = await sb.auth.getSession();
       if (!session) { S = null; drawLoggedOut(); return; }
-      const token = store.get(INVITE_KEY);
-      if (token) {
-        store.del(INVITE_KEY);
-        const { data, error } = await sb.rpc('accept_invite', { p_token: token });
-        if (error) showMsg('নিমন্ত্রণ গ্রহণ করা যায়নি: ' + errText(error), 'err');
-        else showMsg(`স্বাগতম! আপনি এখন ${data.name} (${LEVEL[data.level]}) এর দায়িত্বে যুক্ত হয়েছেন।`, 'ok');
-      }
+      // নিমন্ত্রণ-লিংক খোলা থাকলে আগে নিশ্চিত করানো (ভুল অ্যাকাউন্টে গ্রহণ ঠেকাতে)
+      if (store.get(INVITE_KEY)) { drawInvite(session.user); return; }
       S = await loadAll(session.user);
       // নিজের সংগঠন ও তার উপরের (দেখা যায় এমন) সংগঠনগুলো খোলা রাখা
       for (const o of S.orgs) if (S.mine.some((m) => under(m.org, o))) ui.open.add(o.id);
@@ -277,6 +285,17 @@
     login: () => login(),
     logout: () => logout(),
     reload: () => location.reload(),
+    acceptInvite: (b) => run(b, async () => {
+      const token = store.get(INVITE_KEY);
+      store.del(INVITE_KEY);
+      if (!token) { await refresh(); return; }
+      const { data, error } = await sb.rpc('accept_invite', { p_token: token });
+      if (error) showMsg('নিমন্ত্রণ গ্রহণ করা যায়নি: ' + errText(error), 'err');
+      else showMsg(`স্বাগতম! আপনি এখন ${data.name} (${LEVEL[data.level]}) এর দায়িত্বে যুক্ত হয়েছেন।`, 'ok');
+      await refresh();
+    }),
+    switchAccount: () => logout(),          // নিমন্ত্রণ-টোকেন থেকে যায়; নতুন লগইনের পর আবার জিজ্ঞেস করবে
+    dismissInvite: () => { store.del(INVITE_KEY); showMsg(''); refresh(); },
     resetLogin: () => resetLogin(),
     openForm: (b) => { ui.form = { org: b.dataset.org }; draw(); document.getElementById('newName')?.focus(); },
     cancelForm: () => { ui.form = null; draw(); },
