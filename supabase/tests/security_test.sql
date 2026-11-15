@@ -68,7 +68,8 @@ reset role;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000b2', false);
 set role authenticated;
 select public.accept_invite(test.v('inv_t02'));
-select public.create_org(test.org('t02'), 'থানা ২ এর ওয়ার্ড', 'W');
+select test.expect_error($$select public.create_org(test.org('t02'), 'x', 'W')$$, 'পুরুষ না মহিলা', 'ধরন ছাড়া ওয়ার্ড তৈরি হয় না');
+select public.create_org(test.org('t02'), 'থানা ২ এর ওয়ার্ড', 'W', 'M');
 insert into test.vars values ('inv_t02w01', public.create_invite(test.org('t02w01'), 'president'));
 reset role;
 
@@ -263,4 +264,11 @@ select test.ok((select count(*) from public.memberships where org_id = test.org(
                'নতুন সেক্রেটারি বসলে আগের জন নিজে থেকে সরে যান');
 select test.ok((select count(*) from public.admin_events) >= 10, 'ব্যবস্থাপনার প্রতিটি কাজ লগে লেখা');
 
+-- ===== ধরনের নিয়ম (0004) =====
+select test.ok((select gender from public.orgs where code = 't01') = 'B', 'থানা সবসময় পুরুষ+মহিলা');
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000b1', false);
+set role authenticated;
+select test.ok((public.create_org(test.org('t01'), 'মহিলা ওয়ার্ড', 'W', 'F')).gender = 'F', 'মহিলা ওয়ার্ড তৈরি');
+select test.ok((public.create_org(test.org('t01w02'), 'ইউনিট', 'U', 'M')).gender = 'F', 'মহিলা ওয়ার্ডের ইউনিট নিজে থেকে মহিলা');
+reset role;
 \echo 'সব পরীক্ষা শেষ'

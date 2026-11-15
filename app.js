@@ -148,8 +148,10 @@
     const addForm = ui.form && ui.form.org === o.id ? `<div class="inline-form">
         <label for="newName">নতুন ${LEVEL[childLv]} এর নাম</label>
         <input id="newName" maxlength="120" placeholder="যেমন: ${childLv === 'T' ? 'ডবলমুরিং থানা' : childLv === 'W' ? 'ওয়ার্ড ২৮' : 'ইউনিট ১'}">
-        <label for="newGender">ধরন</label>
-        <select id="newGender"><option value="M" ${o.gender !== 'F' ? 'selected' : ''}>পুরুষ</option><option value="F" ${o.gender === 'F' ? 'selected' : ''}>মহিলা</option></select>
+        ${childLv === 'W'
+          ? `<label for="newGender">ধরন</label>
+             <select id="newGender"><option value="">— বাছুন —</option><option value="M">পুরুষ</option><option value="F">মহিলা</option></select>`
+          : `<p class="muted" style="margin:8px 0 0">ধরন: ${childLv === 'T' ? 'পুরুষ + মহিলা (থানা সবসময় দুটো মিলিয়ে)' : (GENDER[o.gender] || 'পুরুষ') + ' (ওয়ার্ডের মতো)'}</p>`}
         <div class="actions"><button class="primary" data-act="createOrg" data-org="${o.id}" data-level="${childLv}">যোগ করুন</button>
         <button data-act="cancelForm">বাতিল</button></div></div>` : '';
 
@@ -243,7 +245,8 @@
         else showMsg(`স্বাগতম! আপনি এখন ${data.name} (${LEVEL[data.level]}) এর দায়িত্বে যুক্ত হয়েছেন।`, 'ok');
       }
       S = await loadAll(session.user);
-      for (const m of S.mine) ui.open.add(m.org.id);
+      // নিজের সংগঠন ও তার উপরের (দেখা যায় এমন) সংগঠনগুলো খোলা রাখা
+      for (const o of S.orgs) if (S.mine.some((m) => under(m.org, o))) ui.open.add(o.id);
       draw();
     } catch (e) {
       showMsg('তথ্য আনতে সমস্যা হয়েছে: ' + errText(e), 'err');
@@ -284,9 +287,14 @@
     },
     createOrg: (b) => run(b, async () => {
       const name = document.getElementById('newName').value.trim();
-      const gender = document.getElementById('newGender').value;
+      const level = b.dataset.level;
+      const parent = S.orgById.get(b.dataset.org);
+      // থানা = দুটো মিলিয়ে; ওয়ার্ড = বাছাই; ইউনিট = ওয়ার্ডের ধরন
+      const gender = level === 'T' ? 'B' : level === 'W' ? document.getElementById('newGender').value
+        : (parent.gender === 'F' ? 'F' : 'M');
       if (!name) { showMsg('নাম লিখুন।'); return; }
-      const o = await rpc('create_org', { p_parent: b.dataset.org, p_name: name, p_level: b.dataset.level, p_gender: gender, p_start_month: null });
+      if (!gender) { showMsg('ওয়ার্ডটি পুরুষ না মহিলা, বাছুন।'); return; }
+      const o = await rpc('create_org', { p_parent: b.dataset.org, p_name: name, p_level: level, p_gender: gender, p_start_month: null });
       ui.form = null; ui.open.add(b.dataset.org); ui.open.add(o.id);
       showMsg(`"${o.name}" যোগ হয়েছে (কোড ${o.code})। এখন এর দায়িত্বশীলদের নিমন্ত্রণ পাঠান।`, 'ok');
       await refresh();
