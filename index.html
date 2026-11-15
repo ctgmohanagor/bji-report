@@ -40,6 +40,10 @@
   // staging প্রজেক্ট। publishable key প্রকাশ্য চাবি; নিরাপত্তা আসে ডেটাবেসের নিয়ম (RLS) থেকে।
   const SUPABASE_URL = 'https://eulieycutgrhifqlnglr.supabase.co';
   const SUPABASE_KEY = 'sb_publishable_UWaOz95iBLJAnApNTaZIqw_J40_23Bq';
+  if (!window.supabase) {
+    document.getElementById('app').innerHTML = '<div class="card">প্রয়োজনীয় ফাইল লোড হয়নি। ইন্টারনেট সংযোগ দেখে পাতা রিফ্রেশ করুন।</div>';
+    throw new Error('supabase-js লোড হয়নি');
+  }
   const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
   const LEVEL = {M:'মহানগর', T:'থানা', W:'ওয়ার্ড', U:'ইউনিট'};
@@ -56,9 +60,45 @@
     });
     if (error) showMsg('লগইন শুরু করা যায়নি: ' + error.message);
   }
-  async function logout(){ await sb.auth.signOut(); render(); }
+  // লগইনের তথ্য ফোনে মুছে নতুন করে শুরু (আটকে গেলে উদ্ধারের পথ)
+  function resetLogin(){
+    try { Object.keys(localStorage).filter(k => k.startsWith('sb-')).forEach(k => localStorage.removeItem(k)); } catch (e) {}
+    location.replace(location.origin + location.pathname);
+  }
+  async function logout(){
+    try { await sb.auth.signOut({ scope: 'local' }); } catch (e) {}
+    resetLogin();
+  }
 
+  // একসাথে একাধিকবার আঁকা এড়াতে সারি; ত্রুটি হলে বার্তা ও "আবার চেষ্টা"
+  let busy = false, again = false;
   async function render(){
+    if (busy) { again = true; return; }
+    busy = true;
+    const watchdog = setTimeout(showStuck, 15000);
+    try { await draw(); }
+    catch (e) {
+      showMsg('তথ্য আনতে সমস্যা হয়েছে: ' + (e && e.message ? e.message : e));
+      showStuck();
+    }
+    finally {
+      clearTimeout(watchdog);
+      busy = false;
+      if (again) { again = false; render(); }
+    }
+  }
+  function showStuck(){
+    $app.innerHTML = `<div class="card">
+        <p style="margin-top:0">পাতা লোড হতে বেশি সময় লাগছে। ইন্টারনেট সংযোগ দেখে আবার চেষ্টা করুন।</p>
+        <button class="primary" id="retryBtn">আবার চেষ্টা করুন</button>
+        <p class="muted" style="margin-bottom:6px">তবুও না হলে:</p>
+        <button id="resetBtn">লগইন মুছে নতুন করে ঢুকুন</button>
+      </div>`;
+    document.getElementById('retryBtn').onclick = () => location.reload();
+    document.getElementById('resetBtn').onclick = resetLogin;
+  }
+
+  async function draw(){
     const { data: { session } } = await sb.auth.getSession();
     if (!session){
       $app.innerHTML = `<div class="card">
@@ -96,8 +136,9 @@
     document.getElementById('logoutBtn').onclick = logout;
   }
 
-  sb.auth.onAuthStateChange(() => render());
-  render();
+  // গুরুত্বপূর্ণ: এই callback এর ভেতরে সরাসরি Supabase ডাকা যাবে না (লক আটকে যায়);
+  // তাই setTimeout দিয়ে callback শেষ হওয়ার পরে আঁকা হয়।
+  sb.auth.onAuthStateChange(() => { setTimeout(render, 0); });
 </script>
 </body>
 </html>
