@@ -366,6 +366,12 @@ function wardBlocksF_() {
 }
 
 /* o = buildPaperHtml এর মতো + female (true/false), parentName (থানা) */
+/* প্রতিটি ছাপা-পাতা (.pg) এক কাগজে আঁটানো: ফন্ট/ফোন ভেদে লেখা বড় হলে পাতাটা একটু ছোট (zoom) করে।
+   উচ্চতার সীমা Letter কাগজ ধরে (২৫২ মিমি), তাই A4 ও Letter দুটোতেই এক পাতা থাকে। */
+var WARD_FIT_JS_ = '<script>(function(){var MAX=252*96/25.4;function fit(){var ps=document.querySelectorAll(".pg");' +
+  'for(var i=0;i<ps.length;i++){var p=ps[i];p.style.zoom="";var h=p.scrollHeight;if(h>MAX)p.style.zoom=(Math.floor(MAX/h*1000)/1000).toString();}}' +
+  'fit();window.addEventListener("load",fit);if(document.fonts&&document.fonts.ready)document.fonts.ready.then(fit);window.addEventListener("beforeprint",fit);})();<\/script>';
+
 function buildWardPaperHtml(o) {
   var female = !!o.female;
   var fs = parseFloat(o.fontSize) > 5 && parseFloat(o.fontSize) < 16 ? parseFloat(o.fontSize) : 10.5, pbOn = o.pageBreaks !== false;
@@ -383,9 +389,9 @@ function buildWardPaperHtml(o) {
     'table.pf td{border:1px solid #000;padding:1px 3px;text-align:center;font-size:' + fs + 'px;line-height:1.3;height:' + Math.round(fs * 1.55) + 'px;overflow:hidden;word-wrap:break-word}' +
     'table.pf td.l{text-align:left}table.pf td.th{font-weight:bold}table.pf td.b{font-weight:bold}table.pf td.r{text-align:right}' +
     'table.pf td.x{background:#aaa}table.pf td.nb{border:0}' +
-    '.pb{page-break-before:always}.cm{margin-top:14px;font-weight:bold;font-size:12px}.cmbox{height:70px}.sg{text-align:right;font-weight:bold;font-size:12px}' +
+    '.pg{width:190mm;page-break-after:always;break-after:page}.pg:last-of-type{page-break-after:auto;break-after:auto}.pb{page-break-before:always}.cm{margin-top:14px;font-weight:bold;font-size:12px}.cmbox{height:70px}.sg{text-align:right;font-weight:bold;font-size:12px}' +
     '</style></head><body>';
-  h += '<p class="c bis">বিসমিল্লাহির রাহমানির রাহীম</p><p class="c title">ওয়ার্ড সংগঠনের</p>';
+  h += (pbOn ? '<div class="pg">' : '') + '<p class="c bis">বিসমিল্লাহির রাহমানির রাহীম</p><p class="c title">ওয়ার্ড সংগঠনের</p>';
   h += '<p class="c kind">' + PAPER_KINDS_.map(function (k) { return k === o.kind ? '<u>' + htmlEsc_(k) + '</u>' : htmlEsc_(k); }).join('/') + ' রিপোর্ট</p>';
   if (female) h += '<div class="box">মহিলা</div>';
   var leadLab = female ? 'মহিলা বিভাগীয় সেক্রেটারি/সভানেত্রীর নাম' : 'সভাপতির নাম';
@@ -399,7 +405,7 @@ function buildWardPaperHtml(o) {
   h += '<p class="n">* দাওয়াত ও তাবলীগের \'ক\' এর অধীনে ক্রমিক ১-৪ নং পর্যন্ত দাওয়াত প্রদানের মোট সংখ্যা যোগ করে এখানে বসাতে হবে।</p>';
 
   wardBlocks_(female).forEach(function (b) {
-    if (b.pb) { if (pbOn) h += '<div class="pb"></div>'; return; }
+    if (b.pb) { if (pbOn) h += '</div><div class="pg">'; return; }
     if (b.h) { h += '<h3 class="' + (b.big ? 'big' : '') + (b.center ? ' center' : '') + '">' + htmlEsc_(b.h) + (b.ref ? htmlEsc_(num(b.ref) || '...........................') : '') + '</h3>'; return; }
     if (b.p) { h += '<p class="n' + (b.small ? ' small' : '') + (b.bold ? ' bp' : '') + '">' + htmlEsc_(b.p) + '</p>'; return; }
     if (b.table) h += b.narrow ? '<div style="margin:0 5%">' + pfTable_(b.table, vals, b.glue) + '</div>' : pfTable_(b.table, vals, b.glue);
@@ -414,5 +420,6 @@ function buildWardPaperHtml(o) {
     h += female ? cm('মহিলা বিভাগীয় সেক্রেটারি/ওয়ার্ড সভানেত্রীর মন্তব্য', o.comment) + cm('ওয়ার্ড আমীর/সভাপতির মন্তব্য', '')
                 : cm('ওয়ার্ড সভাপতির মন্তব্য', o.comment);
   }
+  if (pbOn) h += '</div>' + WARD_FIT_JS_;
   return h + '</body></html>';
 }

@@ -316,6 +316,12 @@
       var p = check(await sb.from('profiles').select('full_name').in('user_id', [m[0].user_id]));
       return p.length ? (p[0].full_name || '') : '';
     },
+    /* উপরের সংগঠন: নিজে দেখতে পেলে সেটা, নইলে শুধু নাম (0009 parent_name) */
+    _parent: async function (org) {
+      if (!org.parent_id) return null;
+      if (A.byId[org.parent_id]) return A.byId[org.parent_id];
+      try { var r = await sb.rpc('parent_name', { p_org: org.id }); return r.error || !r.data ? null : { name: r.data }; } catch (e) { return null; }
+    },
     _leaderLabel: function (org) { return org.level === 'T' ? 'আমীর/সভাপতি' : (org.gender === 'F' ? 'সভানেত্রী' : 'সভাপতি'); },
 
     apiPdf: async function (month, orgId) {
@@ -330,7 +336,7 @@
       else values = aggregate(fields, await collectNodes(month, org.id, true, reps));
       var texts = {};
       fields.forEach(function (f) { if (f.pattern === 'TXT' && d.v[f.key] && d.v[f.key].txt) texts[f.key] = d.v[f.key].txt; });
-      var parent = org.parent_id ? A.byId[org.parent_id] : null;
+      var parent = await API._parent(org);
       var excl = (d.excluded || []).map(function (id) { var o = A.byId[id]; return o ? orgLabel(o) : 'অজানা'; });
       var leader = await API._leader(org), font = { kind: 'sans', web: true };
       setPdfShowZero_('0');
@@ -357,7 +363,7 @@
       var r = await API.apiPeriod(year, kind, idx, orgId), org = A.byId[orgId || A.me.id];
       var months = periodMonths(year, kind, idx);
       var m1 = parseInt(months[0].split('-')[1], 10), m2 = parseInt(months[months.length - 1].split('-')[1], 10);
-      var leader = await API._leader(org), font = { kind: 'sans', web: true }, parent = org.parent_id ? A.byId[org.parent_id] : null;
+      var leader = await API._leader(org), font = { kind: 'sans', web: true }, parent = await API._parent(org);
       setPdfShowZero_('0');
       var pkind = kind === 'Y' ? 'বার্ষিক' : r.kindName, pmon = MONTHS_BN[m1 - 1] + ' – ' + MONTHS_BN[m2 - 1];
       var html = org.level === 'W' ? buildWardPaperHtml({

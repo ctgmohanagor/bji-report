@@ -475,9 +475,9 @@ function buildPaperHtml(o) {
     'table.pf td{border:1px solid #000;padding:1px 3px;text-align:center;font-size:' + fs + 'px;line-height:1.3;height:' + Math.round(fs * 1.4) + 'px;overflow:hidden;word-wrap:break-word}' +
     'table.pf td.l{text-align:left}table.pf td.th{font-weight:bold}table.pf td.b{font-weight:bold}table.pf td.r{text-align:right}' +
     'table.pf td.x{background:#999}table.pf td.nb{border:0}' +
-    '.pb{page-break-before:always}' +
+    '.pb{page-break-before:always}.pg{width:190mm;page-break-after:always;break-after:page}.pg:last-of-type{page-break-after:auto;break-after:auto}' +
     '</style></head><body>';
-  h += '<p class="c bis">বিসমিল্লাহির রাহমানির রাহীম</p><p class="c title">থানা সংগঠনের রিপোর্ট</p>';
+  h += (pbOn ? '<div class="pg">' : '') + '<p class="c bis">বিসমিল্লাহির রাহমানির রাহীম</p><p class="c title">থানা সংগঠনের রিপোর্ট</p>';
   h += '<p class="c kind">' + PAPER_KINDS_.map(function (k) { return k === o.kind ? '<u>' + htmlEsc_(k) + '</u>' : htmlEsc_(k); }).join('/') + '</p>';
   h += '<p class="c dist">' + htmlEsc_(o.district || '') + '</p>';
   h += '<table class="plain"><tr><td>মাসের নাম : ' + htmlEsc_(o.monthName || '') + '</td><td class="rt">সন: ' + htmlEsc_(o.year || '') + '</td></tr>' +
@@ -489,13 +489,14 @@ function buildPaperHtml(o) {
   h += '<p class="n">* দাওয়াত তাবলীগের \'ক\' এর অধীনে ক্রমিক ১-৪নং পর্যন্ত দাওয়াত প্রদানের মোট সংখ্যা যোগ করে এখানে বসাতে হবে।</p>';
 
   paperBlocks_().forEach(function (b) {
-    if (b.pb) { if (pbOn) h += '<div class="pb"></div>'; return; }
+    if (b.pb) { if (pbOn) h += '</div><div class="pg">'; return; }
     if (b.h) { h += '<h3' + (b.big ? ' class="big"' : '') + '>' + htmlEsc_(b.h) + '</h3>'; return; }
     if (b.p) { h += '<p class="n' + (b.small ? ' small' : '') + '">' + htmlEsc_(b.p) + '</p>'; return; }
     if (b.table) h += pfTable_(b.table, vals, b.glue);
   });
 
   h += pdfSignHtml_(o);
+  if (pbOn) h += '</div>' + (typeof WARD_FIT_JS_ === 'string' ? WARD_FIT_JS_ : '');
   // বাদ-পড়া সংগঠনের তালিকা PDF-এ ছাপা হয় না (ওয়েব পাতায় দেখানো হয়)
   return h + '</body></html>';
 }
