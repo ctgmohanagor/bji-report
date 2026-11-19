@@ -271,4 +271,21 @@ set role authenticated;
 select test.ok((public.create_org(test.org('t01'), 'মহিলা ওয়ার্ড', 'W', 'F')).gender = 'F', 'মহিলা ওয়ার্ড তৈরি');
 select test.ok((public.create_org(test.org('t01w02'), 'ইউনিট', 'U', 'M')).gender = 'F', 'মহিলা ওয়ার্ডের ইউনিট নিজে থেকে মহিলা');
 reset role;
+-- ===== জমার নিয়ম (0005) =====
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000d1', false);
+set role authenticated;
+select public.save_report(test.org('t01w01u1'), '2026-12-01', '{"f001":{"inc":2}}');
+select public.submit_report(test.rep('t01w01u1','2026-12-01'), null, '{"prev":{"f001":9},"cur":{"f001":11},"excluded":[]}');
+select test.ok((select (extra->'cur'->>'f001')::int from public.reports where id = test.rep('t01w01u1','2026-12-01')) = 11, 'জমার সময়ের হিসাব (বর্তমান) সংরক্ষিত');
+select public.save_report(test.org('t01w01u1'), '2027-01-01', '{}');
+select test.expect_error($$select public.submit_report(test.rep('t01w01u1','2027-01-01'))$$, 'আগের মাসের', 'আগের মাস একসেপ্ট না হলে পরের মাস জমা হয় না');
+reset role;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000c1', false);
+set role authenticated;
+select public.save_report(test.org('t01w01'), '2026-12-01', '{}');
+select test.expect_error($$select public.submit_report(test.rep('t01w01','2026-12-01'))$$, 'রিভিউ বাকি', 'নিচের স্তরের রিভিউ বাকি থাকলে জমা হয় না');
+select public.review_report(test.rep('t01w01u1','2026-12-01'), true);
+select test.ok((public.submit_report(test.rep('t01w01','2026-12-01'))).status = 'submitted', 'রিভিউ শেষে জমা হয়');
+reset role;
+select test.expect_error($$update public.reports set extra = '{}' where id = test.rep('t01w01u1','2026-12-01')$$, 'হিসাব বদলানো', 'একসেপ্টেড রিপোর্টের হিসাব বদলানো যায় না');
 \echo 'সব পরীক্ষা শেষ'

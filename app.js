@@ -210,7 +210,12 @@
   function draw() {
     $user.innerHTML = `<button class="small" data-act="logout">লগআউট</button>`;
     if (!S.mine.length) { $app.innerHTML = noRoleHtml(); return; }
-    const mineHtml = S.mine.map((m) => `<div class="row"><span>${LEVEL[m.org.level]}: ${esc(m.org.name)} <code>${esc(m.org.code)}</code></span><b>${ROLE[m.role]}</b></div>`).join('');
+    const seenOrg = new Set();
+    const mineHtml = S.mine.map((m) => {
+      const first = !seenOrg.has(m.org.id); seenOrg.add(m.org.id);
+      return `<div class="row"><span>${LEVEL[m.org.level]}: ${esc(m.org.name)} <code>${esc(m.org.code)}</code><br><b>${ROLE[m.role]}</b></span>
+        ${first ? `<a class="btn primary" href="report.html?org=${encodeURIComponent(m.org.id)}">মাসিক রিপোর্ট</a>` : ''}</div>`;
+    }).join('');
     $app.innerHTML = `
       <div class="card"><h2>${esc(S.user.user_metadata?.full_name || S.user.email)}</h2>${mineHtml}</div>
       ${joinRequestsHtml()}

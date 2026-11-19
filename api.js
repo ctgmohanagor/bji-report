@@ -1,0 +1,309 @@
+/* BJI Report — রিপোর্টের "সার্ভার" স্তর (ব্রাউজারে চলে)
+ * পুরনো Apps Script এর apiHome / apiGetReport / apiSaveDraft / apiPreview / apiSubmit / apiReview /
+ * apiTotals / apiPeriod এর একই আকারের উত্তর দেয়, কিন্তু তথ্য আসে Supabase থেকে।
+ * হিসাব (Logic.js) পুরনো সিস্টেমের হুবহু।
+ * নিরাপত্তা: কে কী দেখবে/লিখবে তা ডেটাবেসের RLS ও ফাংশনেই যাচাই হয়; এখানের যাচাই শুধু সুবিধার জন্য। */
+(function () {
+  'use strict';
+  var CFG = window.BJI_CONFIG;
+  var sb = window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseKey);
+  var TYPE = { U: 'unit', W: 'ward', T: 'thana', M: 'metro' };
+  var DBSTAT = { draft: 'DRAFT', submitted: 'SUBMITTED', returned: 'RETURNED', accepted: 'ACCEPTED' };
+  var STRICT_CHILDREN = '1';
+
+  var A = { user: null, me: null, orgs: [], byId: {}, versions: [] };
+
+  function check(res) { if (res.error) throw new Error(res.error.message); return res.data; }
+  function per(month) { return month + '-01'; }
+  function monthOf(period) { return String(period).substr(0, 7); }
+  function currentMonth() {
+    var p = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka', year: 'numeric', month: '2-digit' }).formatToParts(new Date());
+    var y = p.filter(function (x) { return x.type === 'year'; })[0].value, m = p.filter(function (x) { return x.type === 'month'; })[0].value;
+    return y + '-' + m;
+  }
+  function checkMonth(month) {
+    if (!isValidMonth(month)) throw new Error('মাসের তথ্য ঠিক নয়।');
+    if (month > currentMonth()) throw new Error('ভবিষ্যতের মাসের রিপোর্ট দেওয়া যাবে না।');
+  }
+  function orgLabel(o) {
+    if (o.level === 'U' && o.parent_id && A.byId[o.parent_id] && A.byId[o.parent_id].level === 'W') return A.byId[o.parent_id].name + ' / ' + o.name;
+    return o.name;
+  }
+  function startOk(o, month) { return !o.start_month || String(o.start_month).substr(0, 7) <= month; }
+  function childOrgs(parentId, month) {
+    return A.orgs.filter(function (o) { return o.parent_id === parentId && o.active && startOk(o, month); });
+  }
+
+  /* ---- ফর্ম-সংস্করণ: মাসের জন্য সর্বশেষ প্রযোজ্যটি ---- */
+  function allFields(month) {
+    var v = A.versions.filter(function (x) { return monthOf(x.valid_from) <= month; })
+      .sort(function (a, b) { return a.valid_from < b.valid_from ? 1 : -1; })[0];
+    if (!v) return [];
+    return v.fields.filter(function (f) { return PATTERNS[f.pattern]; })
+      .map(function (f) { var c = Object.assign({}, f); c.tab = tabOfSection(f.section); return c; });
+  }
+
+  /* ---- রিপোর্ট আনা ---- */
+  function norm(r) {
+    var x = r.extra || {};
+    return { id: r.id, org_id: r.org_id, month: monthOf(r.period), status: DBSTAT[r.status], version: r.version,
+             comment: r.return_note || '', submitted_at: r.submitted_at || '', parent_id: (A.byId[r.org_id] || {}).parent_id || '',
+             d: { v: r.data || {}, prev: x.prev, cur: x.cur, excluded: x.excluded || [] } };
+  }
+  var COLS = 'id,org_id,period,status,data,extra,version,return_note,submitted_at';
+  async function monthReports(month) {
+    var rows = check(await sb.from('reports').select(COLS).eq('period', per(month)));
+    var out = {};
+    rows.forEach(function (r) { var n = norm(r); out[n.org_id] = n; });
+    return out;
+  }
+  async function findReport(month, orgId) {
+    var rows = check(await sb.from('reports').select(COLS).eq('period', per(month)).eq('org_id', orgId));
+    return rows.length ? norm(rows[0]) : null;
+  }
+
+  /* আগের একসেপ্টেড মাসের "বর্তমান"; না থাকলে ০ (পুরনো lookupPrev_ এর মতো; ফিক্সড শুরুর মান পরে যোগ হবে) */
+  async function lookupPrev(orgId, month, fields) {
+    var rows = check(await sb.from('reports').select('period,extra').eq('org_id', orgId).eq('status', 'accepted')
+      .lt('period', per(month)).order('period', { ascending: false }).limit(1));
+    var frozen = rows.length ? ((rows[0].extra || {}).cur || {}) : {};
+    var lastYear = rows.length ? String(rows[0].period).substr(0, 4) : '';
+    var prev = {};
+    fields.forEach(function (f) {
+      if (!PATTERNS[f.pattern].carry) return;
+      var useFrozen = f.pattern !== 'FX' && frozen[f.key] !== undefined;
+      if (useFrozen && PATTERNS[f.pattern].ytd && lastYear !== String(month).substr(0, 4)) { prev[f.key] = 0; return; }
+      prev[f.key] = useFrozen ? frozen[f.key] : 0;
+    });
+    return prev;
+  }
+
+  /* কোনো স্তরের মোটের জন্য: নিজের রিপোর্ট + নিচের সব একসেপ্টেড রিপোর্ট (পুরনো collectNodes_) */
+  async function collectNodes(month, rootId, previewOwn, reps) {
+    reps = reps || await monthReports(month);
+    var fieldsAll = allFields(month), nodes = [], root = A.byId[rootId], rr = reps[rootId];
+    var ownOk = rr && root && (rr.status === STATUS.ACCEPTED || previewOwn === true ||
+                               (previewOwn === 'submitted' && rr.status === STATUS.SUBMITTED));
+    if (ownOk) {
+      var frozen = (rr.status === STATUS.ACCEPTED || rr.status === STATUS.SUBMITTED) && rr.d.prev;
+      nodes.push({ orgId: rootId, level: root.level, gender: root.gender, data: rr.d.v, root: true,
+                   prev: frozen ? rr.d.prev : await lookupPrev(rootId, month, fieldsForLevel(fieldsAll, root.level, root.gender)) });
+    }
+    var queue = [rootId], seen = {};
+    while (queue.length) {
+      var id = queue.shift();
+      if (seen[id]) continue;
+      seen[id] = 1;
+      A.orgs.filter(function (o) { return o.parent_id === id; }).forEach(function (o) {
+        var r = reps[o.id];
+        if (!r || r.status !== STATUS.ACCEPTED) return;
+        nodes.push({ orgId: o.id, level: o.level, gender: o.gender, data: r.d.v, prev: r.d.prev || {} });
+        queue.push(o.id);
+      });
+    }
+    return nodes;
+  }
+
+  function kidStatuses(parentId, month, reps) {
+    return childOrgs(parentId, month).map(function (o) {
+      var r = reps[o.id];
+      return { id: o.id, name: orgLabel(o), type: TYPE[o.level], gender: o.gender,
+               status: r ? r.status : 'NONE', submittedAt: r ? String(r.submitted_at) : '' };
+    });
+  }
+
+  function homeData(month, reps) {
+    var me = A.me, mine = reps[me.id];
+    var status = mine ? mine.status : 'NONE';
+    var kids = kidStatuses(me.id, month, reps);
+    var gate = childGate(STRICT_CHILDREN, kids);
+    var editable = isEditableStatus(mine ? mine.status : '');
+    return {
+      month: month, monthLabel: monthLabel(month), orgId: me.id, orgName: orgLabel(me),
+      status: status, comment: mine ? mine.comment : '',
+      canEdit: editable, canSubmit: editable && !gate.blocked, canPdf: false,
+      submitLabel: 'জমা দিন',
+      pending: gate.pending.map(function (k) { return k.name; }),
+      notIncluded: gate.notIncluded.map(function (k) { return k.name; }),
+      children: kids.map(function (k) { return { orgId: k.id, name: k.name, type: k.type, gender: k.gender, status: k.status, submittedAt: k.submittedAt }; })
+    };
+  }
+
+  var API = {
+    sb: sb,
+
+    /* লগইন ও কোন সংগঠনের রিপোর্ট, তা ঠিক করা */
+    init: async function (orgId) {
+      var s = (await sb.auth.getSession()).data.session;
+      if (!s) throw new Error('SESSION');
+      A.user = s.user;
+      var res = await Promise.all([
+        sb.from('memberships').select('org_id,role').eq('active', true).eq('user_id', s.user.id),
+        sb.from('orgs').select('id,code,name,level,gender,parent_id,path,active,start_month').order('path'),
+        sb.from('form_versions').select('id,valid_from,fields')
+      ]);
+      var mem = check(res[0]); A.orgs = check(res[1]); A.versions = check(res[2]);
+      A.byId = {}; A.orgs.forEach(function (o) { A.byId[o.id] = o; });
+      var mine = mem.map(function (m) { return A.byId[m.org_id]; }).filter(Boolean);
+      return { mine: mine.map(function (o) { return { id: o.id, name: orgLabel(o), level: o.level }; }), picked: orgId };
+    },
+    use: function (orgId) {
+      var o = A.byId[orgId];
+      if (!o) throw new Error('এই সংগঠনটি পাওয়া যায়নি বা দেখার অনুমতি নেই।');
+      A.me = o;
+    },
+
+    apiBootstrap: async function () {
+      var cm = currentMonth(), sessions = sessionList('2026,2027', cm.split('-')[0]);
+      var y = cm.split('-')[0];
+      return { me: { orgId: A.me.id, name: orgLabel(A.me), type: TYPE[A.me.level], gender: A.me.gender, level: A.me.level, mustChange: false },
+               tabs: tabNames(), patterns: PATTERNS, currentMonth: cm, monthNames: MONTHS_BN, sessions: sessions,
+               defaultSession: sessions.indexOf(y) >= 0 ? y : sessions[0], periods: periodOptions(), email: A.user.email };
+    },
+
+    apiHome: async function (month) {
+      checkMonth(month);
+      return homeData(month, await monthReports(month));
+    },
+
+    apiGetReport: async function (month, orgId) {
+      checkMonth(month);
+      var org = A.byId[orgId];
+      if (!org) throw new Error('এই ইউনিট/ওয়ার্ড পাওয়া যায়নি।');
+      var reps = await monthReports(month), rep = reps[orgId] || null;
+      var all = allFields(month), fields = fieldsForLevel(all, org.level, org.gender);
+      var d = rep ? rep.d : { v: {} };
+      var frozen = rep && (rep.status === STATUS.SUBMITTED || rep.status === STATUS.ACCEPTED) && d.prev;
+      var prev = frozen ? d.prev : await lookupPrev(orgId, month, fields);
+      var mine = A.me.id === orgId;
+      var derived = aggregate(fields, [{ level: org.level, gender: org.gender, data: d.v, prev: prev, root: true }]);
+      // থানার রিপোর্টে নিচের স্তরের লেখা কিন্তু থানার নিজের নয় এমন ঘর: একসেপ্টেড রিপোর্টের যোগফল (শুধু পড়া)
+      if (org.level === 'T') {
+        var ownKeys = {}; fields.forEach(function (f) { ownKeys[f.key] = 1; });
+        var calc = all.filter(function (f) { return !ownKeys[f.key] && f.enter.indexOf('T') < 0; });
+        var nodes = (await collectNodes(month, orgId, false, reps)).filter(function (nd) { return !nd.root; });
+        var res = aggregate(calc, nodes), shown = {};
+        calc.forEach(function (f) { if (res[f.key] && !/into:/.test(f.opt || '') && !isAuto_(f) && f.pattern !== 'TXT') shown[f.key] = res[f.key]; });
+        fields = all.map(function (f) {
+          if (ownKeys[f.key]) return fields.filter(function (x) { return x.key === f.key; })[0];
+          if (shown[f.key]) { var c = Object.assign({}, f); c.ro = true; return c; }
+          return null;
+        }).filter(Boolean);
+        Object.keys(shown).forEach(function (k) { derived[k] = shown[k]; });
+      }
+      var parentId = org.parent_id;
+      return {
+        month: month, monthLabel: monthLabel(month), orgId: orgId, orgName: orgLabel(org), gender: org.gender, level: org.level,
+        status: rep ? rep.status : 'NONE', comment: rep ? rep.comment : '',
+        editable: mine && isEditableStatus(rep ? rep.status : ''),
+        canReview: !mine && !!rep && rep.status === STATUS.SUBMITTED && parentId === A.me.id,
+        canPdf: false,
+        excluded: (d.excluded || []).map(function (id) { var o = A.byId[id]; return o ? orgLabel(o) : 'অজানা'; }),
+        fields: renumberSubs_(fields), data: d.v, prev: prev, derived: derived
+      };
+    },
+
+    _save: async function (month, input) {
+      var me = A.me, fields = fieldsForLevel(allFields(month), me.level, me.gender);
+      var rep = await findReport(month, me.id);
+      if (!isEditableStatus(rep ? rep.status : '')) throw new Error('এই রিপোর্ট এখন বদলানো যাবে না।');
+      var clean = validateData(fields, me.level, me.gender, input);
+      clean = mergeKeepOmitted(rep ? rep.d.v : {}, clean, fields);
+      var row = check(await sb.rpc('save_report', { p_org: me.id, p_period: per(month), p_data: clean,
+                                                    p_expected_version: rep ? rep.version : null }));
+      return { row: row, clean: clean, fields: fields };
+    },
+
+    apiSaveDraft: async function (month, input) {
+      checkMonth(month);
+      var s = await API._save(month, input), auto = {};
+      if (s.fields.some(function (f) { return isAuto_(f) || autoIncSrc_(f); })) {
+        var dv = aggregate(s.fields, [{ orgId: A.me.id, level: A.me.level, gender: A.me.gender, root: true, data: s.clean,
+                                        prev: await lookupPrev(A.me.id, month, s.fields) }]);
+        s.fields.forEach(function (f) { if ((isAuto_(f) || autoIncSrc_(f)) && dv[f.key]) auto[f.key] = dv[f.key]; });
+      }
+      return { saved: true, auto: auto };
+    },
+
+    apiPreview: async function (month, input) {
+      var me = A.me, fields = fieldsForLevel(allFields(month), me.level, me.gender);
+      var clean = validateData(fields, me.level, me.gender, input);
+      var dv = aggregate(fields, [{ orgId: me.id, level: me.level, gender: me.gender, root: true,
+                                    data: mergeKeepOmitted({}, clean, fields), prev: await lookupPrev(me.id, month, fields) }]), vals = {};
+      fields.forEach(function (f) { if ((isAuto_(f) || autoIncSrc_(f)) && dv[f.key]) vals[f.key] = dv[f.key]; });
+      return { vals: vals };
+    },
+
+    apiSubmit: async function (month, input) {
+      checkMonth(month);
+      var me = A.me;
+      var reps = await monthReports(month);
+      var gate = childGate(STRICT_CHILDREN, kidStatuses(me.id, month, reps));
+      if (gate.blocked) throw new Error('এই অধীনস্থদের রিপোর্ট রিভিউ বাকি আছে (আগে একসেপ্ট বা ফেরত দিন): ' + gate.pending.map(function (k) { return k.name; }).join(', '));
+      var s = (input === undefined || input === null) ? null : await API._save(month, input);
+      var fields = fieldsForLevel(allFields(month), me.level, me.gender);
+      var rep = await findReport(month, me.id);
+      if (!rep) throw new Error('আগে রিপোর্টটি সংরক্ষণ করুন।');
+      var d = rep.d;
+      var carry = carryOf(fields, d.v, await lookupPrev(me.id, month, fields));
+      // rootprev: এই স্তরের "বিগত" পুরো মোটের শুরু, তাই "বর্তমান" = নিচের একসেপ্টেড স্তরসহ পুরো মোট
+      var rootFields = fields.filter(function (f) { return /rootprev/.test(f.opt || ''); });
+      if (rootFields.length) {
+        var subs = (await collectNodes(month, me.id, false, reps)).filter(function (nd) { return !nd.root; });
+        var tot = aggregate(rootFields, [{ orgId: me.id, level: me.level, gender: me.gender, root: true, data: d.v, prev: carry.prev }].concat(subs));
+        rootFields.forEach(function (f) { if (tot[f.key]) carry.cur[f.key] = tot[f.key].cur; });
+      }
+      var extra = { prev: carry.prev, cur: carry.cur, excluded: gate.notIncluded.map(function (k) { return k.id; }) };
+      check(await sb.rpc('submit_report', { p_report: rep.id, p_expected_version: rep.version, p_extra: extra }));
+      var after = await monthReports(month);
+      return { status: (after[me.id] || {}).status, excluded: gate.notIncluded.map(function (k) { return k.name; }), home: homeData(month, after) };
+    },
+
+    apiReview: async function (month, orgId, decision, comment) {
+      var rep = await findReport(month, orgId);
+      if (!rep || rep.status !== STATUS.SUBMITTED) throw new Error('এই রিপোর্ট এখন রিভিউয়ের অবস্থায় নেই।');
+      if (decision === 'return' && !String(comment || '').trim()) throw new Error('ফেরত পাঠালে কারণ লিখতে হবে।');
+      check(await sb.rpc('review_report', { p_report: rep.id, p_accept: decision === 'accept',
+                                            p_note: decision === 'accept' ? null : String(comment).trim().substr(0, 500) }));
+      return { ok: true, home: homeData(month, await monthReports(month)) };
+    },
+
+    apiTotals: async function (month, orgId) {
+      checkMonth(month);
+      var org = A.byId[orgId || A.me.id];
+      var nodes = await collectNodes(month, org.id, A.me.id === org.id);
+      var fields = allFields(month), res = aggregate(fields, nodes);
+      return { month: month, monthLabel: monthLabel(month), orgName: orgLabel(org), nodeCount: nodes.length,
+               fields: renumberSubs_(fields.filter(function (f) { return res[f.key]; })), values: res, gender: org.gender };
+    },
+
+    apiPeriod: async function (year, kind, idx, orgId) {
+      var months = periodMonths(year, kind, idx), cur = currentMonth();
+      if (!months.length) throw new Error('সময়কাল ঠিক নয়।');
+      if (months[0] > cur) throw new Error('এই সময়কাল এখনও শুরু হয়নি।');
+      var org = A.byId[orgId || A.me.id], nodes = [], coverage = [];
+      for (var i = 0; i < months.length; i++) {
+        var m = months[i];
+        if (m > cur) continue;
+        var ns = await collectNodes(m, org.id, 'submitted'), got = {};
+        ns.forEach(function (n) { n.month = m; got[n.orgId] = 1; nodes.push(n); });
+        var expected = [org].concat(A.orgs.filter(function (o) {
+          return o.id !== org.id && o.active && startOk(o, m) && String(o.path).indexOf(org.path + '.') === 0;
+        })).filter(function (o) { return startOk(o, m); });
+        coverage.push({ month: m, label: monthLabel(m), included: ns.length,
+                        missing: expected.filter(function (o) { return !got[o.id]; }).map(orgLabel) });
+      }
+      var fields = allFields(months[months.length - 1]), values = aggregatePeriod(fields, nodes);
+      return { orgName: orgLabel(org), periodLabel: periodLabel(year, kind, idx), kindName: PERIOD_KINDS[kind].name,
+               months: months.map(monthLabel), nodeCount: nodes.length, partial: months[months.length - 1] > cur,
+               fields: renumberSubs_(fields.filter(function (f) { return values[f.key]; })), values: values,
+               gender: org.gender, coverage: coverage };
+    },
+
+    logout: async function () {
+      try { await sb.auth.signOut({ scope: 'local' }); } catch (e) {}
+      location.href = 'index.html';
+    }
+  };
+  window.API = API;
+})();

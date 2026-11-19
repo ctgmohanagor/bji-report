@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BJI Report · মাসিক রিপোর্ট</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f3f5f7;--card:#fff;--ink:#1c2733;--mut:#68767f;--pri:#1f6f5c;--pri-ink:#fff;--soft:#e5f1ee;--line:#d9e0e5;--bad:#b3261e;--bad-soft:#fbe9e7;--warn:#8a5a00;--warn-soft:#fff3d6;--ok:#17653f;--ok-soft:#dff3e7}
+@media (prefers-color-scheme:dark){:root{--bg:#0f161c;--card:#17212a;--ink:#e8eef2;--mut:#9aa9b4;--pri:#4fbf9f;--pri-ink:#062119;--soft:#163129;--line:#2a3843;--bad:#ff8f86;--bad-soft:#3a1d1a;--warn:#f0c15a;--warn-soft:#3a2d10;--ok:#6fdc9f;--ok-soft:#14301f}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans Bengali","Nirmala UI","Kalpurush",system-ui,sans-serif;font-size:16px;line-height:1.5}
+header{position:sticky;top:0;z-index:5;background:var(--pri);color:var(--pri-ink);padding:10px 14px;display:flex;align-items:center;gap:10px;padding-top:max(10px,env(safe-area-inset-top))}
+header b{flex:1;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+header .iconbtn{background:transparent;border:1px solid currentColor;color:inherit;border-radius:50%;width:34px;height:34px;padding:0;display:flex;align-items:center;justify-content:center}
+.acct{position:relative}
+#hdrop{display:none;position:absolute;right:0;top:calc(100% + 8px);min-width:190px;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:10px;box-shadow:0 6px 20px rgba(0,0,0,.2);overflow:hidden;z-index:10}
+#hdrop button{display:block;width:100%;text-align:left;background:transparent;border:0;color:inherit;padding:11px 14px;font:inherit;font-size:14px}
+#hdrop button+button{border-top:1px solid var(--line)}
+main{max-width:720px;margin:0 auto;padding:12px 12px 90px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin:10px 0}
+h2{margin:0 0 6px;font-size:18px}h3{margin:18px 0 4px;font-size:16px;color:var(--pri)}h4{margin:12px 0 2px;font-size:14px;color:var(--mut);font-weight:600}
+label{display:block;font-size:13px;color:var(--mut);margin:10px 0 3px}
+input,select,textarea{width:100%;font:inherit;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink)}
+textarea{min-height:80px}
+.btn{display:inline-block;background:var(--pri);color:var(--pri-ink);border:0;border-radius:8px;padding:7px 12px;font:inherit;font-size:14px;font-weight:600;margin:5px 5px 0 0}
+.lnk{background:none;border:0;color:var(--pri);font:inherit;font-size:14px;padding:8px 4px;text-decoration:underline}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+details.note summary{cursor:pointer;font-weight:600}
+.btn.sec{background:var(--soft);color:var(--ink)}.btn.bad{background:var(--bad);color:#fff}
+.btn:disabled{opacity:.45}
+.chip{display:inline-block;padding:2px 10px;border-radius:99px;font-size:12.5px;font-weight:600;background:var(--soft);color:var(--ink)}
+.chip.ACCEPTED{background:var(--ok-soft);color:var(--ok)}.chip.SUBMITTED{background:var(--warn-soft);color:var(--warn)}.chip.RETURNED{background:var(--bad-soft);color:var(--bad)}
+.note{padding:10px;border-radius:8px;margin:8px 0;font-size:14px}.note.bad{background:var(--bad-soft);color:var(--bad)}.note.warn{background:var(--warn-soft);color:var(--warn)}
+.row{display:flex;align-items:center;gap:8px;padding:10px 0;border-top:1px solid var(--line)}.row:first-child{border-top:0}.row .nm{flex:1;min-width:0}
+.fld{border-top:1px solid var(--line);padding:10px 0}.fld:first-of-type{border-top:0}
+.fld .lb{font-size:14.5px;margin-bottom:6px}
+.grid{display:grid;grid-template-columns:repeat(var(--cn,3),minmax(0,1fr));gap:8px}
+/* ঘরের সংখ্যা অনুযায়ী কলাম: যত ঘর দেখানো হচ্ছে ঠিক তত কলাম, তাই ফাঁকা জায়গা বা 3+1 ভাঙন হয় না */
+.grid.n1{--cn:1;max-width:240px}.grid.n2{--cn:2}.grid.n3{--cn:3}.grid.n4{--cn:4}.grid.n5{--cn:5}.grid.n6{--cn:3}.grid.n7,.grid.n8{--cn:4}
+@media (max-width:520px){.grid.n4{--cn:2}.grid.n5{--cn:3}}
+.col{display:flex;flex-direction:column;min-width:0}
+.col .cl{display:block;flex:1 1 auto;font-size:12px;line-height:1.35;color:var(--mut);margin-bottom:3px;overflow-wrap:anywhere}
+.gl{font-size:12px;font-weight:700;color:var(--pri);margin:6px 0 3px}
+/* পাশাপাশি গ্রুপ (grp): একই সারিতে n টি ফিল্ড; লেবেল flex:1 তাই ইনপুটগুলো নিচে এক লাইনে মেলে */
+.fgrp{display:grid;grid-template-columns:repeat(var(--gn,2),minmax(0,1fr));gap:10px;border-top:1px solid var(--line);padding:10px 0}
+.fgrp>.fld{border-top:0;padding:0;display:flex;flex-direction:column;min-width:0}
+.fgrp>.fld .lb{flex:1 1 auto;font-size:13.5px}
+.fgrp.g3>.fld .lb{font-size:12.5px}
+.sec{margin:20px 0 8px;padding:9px 12px;background:var(--pri);color:var(--pri-ink);border-radius:8px;font-size:15.5px;font-weight:700}
+.sec:first-child{margin-top:4px}
+@media (max-width:520px){.fgrp.wide{grid-template-columns:minmax(0,1fr)}}
+.sub{margin:12px 0 6px;padding:7px 10px;background:var(--soft);border-left:4px solid var(--pri);border-radius:6px;font-size:14px;font-weight:700;color:var(--ink)}
+.hrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.hrow h2{margin:0}
+.btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}.btns .btn{margin:0}
+.subtle{margin:4px 0 0;font-size:13px;color:var(--mut)}
+.fnote{font-size:12px;color:var(--mut);margin:2px 0 6px}
+.lbin{width:100%;margin-bottom:6px}
+/* ---- রিপোর্টের ৫ বিভাগের ট্যাব: শুধু তথ্য-লেখার সময় ----
+   মোবাইল: ৬ কলামের গ্রিড। প্রথম ৩টি ২ কলাম করে (৩টি সমান), শেষ ২টি ৩ কলাম করে (২টি সমান)।
+   বড় পর্দা: ৫টি এক সারিতে। */
+.tabs{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;margin:0 0 10px;padding:8px 0;
+  position:sticky;top:var(--hh,52px);z-index:4;background:var(--bg);box-shadow:0 1px 0 var(--line)}
+.tab{grid-column:span 2;display:flex;align-items:center;justify-content:center;min-height:44px;padding:6px 6px;
+  border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink);
+  font:inherit;font-size:14px;font-weight:600;line-height:1.35;text-align:center;
+  overflow-wrap:anywhere;word-break:break-word;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.tab:nth-child(n+4){grid-column:span 3}
+.tab.active,.tab[aria-selected="true"]{background:var(--pri);color:var(--pri-ink);border-color:var(--pri)}
+.tab:focus-visible{outline:2px solid var(--pri);outline-offset:2px}
+.tabpanel[hidden]{display:none}
+@media (min-width:640px){
+  .tabs{grid-template-columns:repeat(5,minmax(0,1fr))}
+  .tab,.tab:nth-child(n+4){grid-column:span 1}
+}
+.ro{padding:10px 8px;background:var(--soft);border-radius:8px;text-align:center;min-height:42px}
+.col input{text-align:center;padding:10px 6px}
+.bar{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--line);padding:10px 12px max(10px,env(safe-area-inset-bottom));display:flex;gap:8px;justify-content:center;flex-wrap:wrap;z-index:6}
+.bar .btn{margin:0}
+#busy{position:fixed;inset:0;background:rgba(0,0,0,.25);display:none;align-items:center;justify-content:center;z-index:20;color:#fff;font-weight:600}
+#toast{position:fixed;left:12px;right:12px;bottom:80px;z-index:30;display:none;padding:12px;border-radius:10px;background:var(--ink);color:var(--bg);text-align:center}
+#toast.bad{background:var(--bad);color:#fff}
+#modal{position:fixed;inset:0;background:rgba(0,0,0,.4);display:none;align-items:center;justify-content:center;z-index:40;padding:16px}
+#modal .box{background:var(--card);border-radius:14px;padding:16px;width:100%;max-width:420px}
+small.mut{color:var(--mut)}
+</style>
+</head>
+<body>
+<header id="hd" style="display:none"><b id="hname"></b>
+<div class="acct"><button class="iconbtn" id="hmenu" aria-label="Account" aria-haspopup="true" aria-expanded="false"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8"/></svg></button>
+<div id="hdrop" role="menu"><div id="hemail" style="padding:10px 14px;font-size:12.5px;color:var(--mut)"></div><button id="hpf" role="menuitem">সংগঠন পাতা</button><button id="hsw" role="menuitem">অন্য সংগঠনের রিপোর্ট</button><button id="hout" role="menuitem">লগআউট</button></div></div></header>
+<main id="app"></main>
+<div id="busy">অপেক্ষা করুন…</div>
+<div id="toast"></div>
+<div id="modal"><div class="box" id="mbox"></div></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="config.js?v=6"></script>
+<script src="logic.js?v=6"></script>
+<script src="api.js?v=6"></script>
+<script src="report-ui.js?v=6"></script>
+</body>
+</html>
