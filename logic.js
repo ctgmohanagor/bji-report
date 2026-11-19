@@ -67,6 +67,14 @@ var PATTERNS = {
           cols: [{ k: 'r', label: 'কতজনের মাঝে দাওয়াত পৌঁছানো হয়েছে' }, { k: 's', label: 'কতজন সহযোগী সদস্য হয়েছেন' }, { k: 'target', label: 'টার্গেট' },
                  { k: 'rate', label: 'হার %', calc: 1 }] },
   /* বিগত → বর্তমান: ঘাটতি নেই / শুধু বর্তমান লেখা / ফিক্সড */
+  /* CF + বৃদ্ধি দুই ভাগে (মানোন্নয়ন / আগত); ওয়ার্ডে opt "cfs:WM" দিয়ে CF ফিল্ড এই রূপে আসে */
+  CFS:  { inputs: ['up', 'in', 'dec', 'target'], carry: 1,
+          cols: [{ k: 'prev', label: 'বিগত', calc: 1 }, { k: 'up', label: 'বৃদ্ধি — মানোন্নয়ন' }, { k: 'in', label: 'বৃদ্ধি — আগত' },
+                 { k: 'inc', label: 'মোট বৃদ্ধি', calc: 1 }, { k: 'dec', label: 'ঘাটতি' },
+                 { k: 'cur', label: 'বর্তমান', calc: 1 }, { k: 'target', label: 'টার্গেট' }, { k: 'rate', label: 'হার %', calc: 1 }] },
+  N5:   { inputs: ['c1', 'c2', 'c3', 'c4', 'c5'], sum: 1,
+          cols: [{ k: 'c1', label: 'সংখ্যা ১', slot: 0 }, { k: 'c2', label: 'সংখ্যা ২', slot: 1 }, { k: 'c3', label: 'সংখ্যা ৩', slot: 2 },
+                 { k: 'c4', label: 'সংখ্যা ৪', slot: 3 }, { k: 'c5', label: 'সংখ্যা ৫', slot: 4 }] },
   CFN:  { inputs: ['inc', 'target'], carry: 1,
           cols: [{ k: 'prev', label: 'বিগত', calc: 1 }, { k: 'inc', label: 'বৃদ্ধি' }, { k: 'cur', label: 'বর্তমান', calc: 1 },
                  { k: 'target', label: 'টার্গেট' }, { k: 'rate', label: 'হার %', calc: 1 }] },
@@ -244,6 +252,8 @@ function periodOptions() {
 function fieldsForLevel(fields, level, gender) {
   return fields.filter(function (f) {
     if (f.enter.indexOf(level) < 0) return false;
+    // gw: ওয়ার্ডে কোন লিঙ্গের ফর্মে ঘরটি আছে ('M', 'F', 'MF', '' = কোনোটিতে নয়)। থাকলে ওয়ার্ডে only এর বদলে এটাই চলে।
+    if (level === 'W' && typeof f.gw === 'string') return !!gender && (gender === 'B' ? f.gw !== '' : f.gw.indexOf(gender) >= 0);
     if (gender && f.only && gender !== 'B' && f.only !== gender) return false;
     return true;
   }).map(function (f) {
@@ -256,6 +266,9 @@ function fieldsForLevel(fields, level, gender) {
       else if (lm && gender === 'F') h.label = lm[1];
       f = h;
     }
+    // opt "cfs:WM" : এই স্তর+লিঙ্গে CF ফিল্ডের বৃদ্ধি দুই ভাগে (মানোন্নয়ন/আগত)
+    var cm = /cfs:([UWT])([MFB]*)/.exec(f.opt || '');
+    if (cm && cm[1] === level && f.pattern === 'CF' && (!cm[2] || cm[2].indexOf(gender) >= 0)) { var cc = {}; Object.keys(f).forEach(function (k) { cc[k] = f[k]; }); cc.pattern = 'CFS'; f = cc; }
     // opt "inputat:W" : এই স্তরে ফিল্ডটি স্বয়ংক্রিয় নয়, সংখ্যা লেখার ঘর (N); অন্য স্তরে স্বয়ংক্রিয়ই থাকে
     var m = /inputat:([UWT]+)/.exec(f.opt || '');
     if (m && m[1].indexOf(level) >= 0 && isAuto_(f)) { var c = {}; Object.keys(f).forEach(function (k) { c[k] = f[k]; }); c.pattern = 'N'; c.src = ''; return c; }
@@ -333,7 +346,8 @@ function ownValues(field, d, prev) {
     case 'N': case 'TK': return { v: g('v') };
     case 'PM': case 'M3': return { m: g('m'), f: g('f') };
     case 'TB': return { prev: prev || 0, inc: g('inc') };
-    case 'CF': return { prev: prev || 0, inc: g('inc'), dec: g('dec'), target: g('target') };
+    case 'CF': case 'CFS':   // CFS: বৃদ্ধি = মানোন্নয়ন + আগত (থানার যোগফলে CF হিসেবেই যোগ হয়)
+      return { prev: prev || 0, inc: g('inc') + g('up') + g('in'), up: g('up'), in: g('in'), dec: g('dec'), target: g('target') };
     case 'CFN': case 'TBT': case 'YTD': return { prev: prev || 0, inc: g('inc'), target: g('target') };
     case 'ATT2': return { gm: g('gm'), gf: g('gf'), sm: g('sm'), sf: g('sf'), wm: g('sm') * g('am'), wf: g('sf') * g('af') };
     case 'ATTX3': return { c1: g('c1'), c2: g('c2'), c3: g('c3'), w1: g('c1') * g('a1'), w2: g('c2') * g('a2'), w3: g('c3') * g('a3') };
@@ -355,8 +369,8 @@ function finalizeValues(field, c) {
     case 'PM': return { m: round2_(z('m')), f: round2_(z('f')) };
     case 'M3': return { tot: round2_(z('m') + z('f')), m: round2_(z('m')), f: round2_(z('f')) };
     case 'TB': return { prev: round2_(z('prev')), inc: round2_(z('inc')), cur: round2_(z('prev') + z('inc')) };
-    case 'CF':
-      return { prev: round2_(z('prev')), inc: round2_(z('inc')), dec: round2_(z('dec')),
+    case 'CF': case 'CFS':
+      return { prev: round2_(z('prev')), inc: round2_(z('inc')), up: round2_(z('up')), in: round2_(z('in')), dec: round2_(z('dec')),
                cur: round2_(z('prev') + z('inc') - z('dec')), target: round2_(z('target')),
                rate: z('target') > 0 ? round2_(z('inc') / z('target') * 100) : null };
     case 'TBT': case 'YTD':

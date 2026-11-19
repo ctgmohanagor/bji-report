@@ -412,6 +412,7 @@ function recalc(fkey) {
   if (f.pattern === 'M3') set('tot', n('m') + n('f'));
   if (f.pattern === 'TB') { set('prev', prev); set('cur', prev + n('inc')); }
   if (f.pattern === 'CF') { set('prev', prev); set('cur', prev + n('inc') - n('dec')); set('rate', n('target') > 0 ? n('inc') / n('target') * 100 : null, true); }
+  if (f.pattern === 'CFS') { var ic = n('up') + n('in'); set('prev', prev); set('inc', ic); set('cur', prev + ic - n('dec')); set('rate', n('target') > 0 ? ic / n('target') * 100 : null, true); }
   if (f.pattern === 'TBT' || f.pattern === 'YTD') { set('prev', prev); set('cur', prev + n('inc')); }
   if (f.pattern === 'CFN') { set('prev', prev); set('cur', prev + n('inc')); set('rate', n('target') > 0 ? n('inc') / n('target') * 100 : null, true); }
   if (f.pattern === 'CB') set('prev', prev);
