@@ -163,6 +163,7 @@ function fillPeriod() {
   }).join('') : '');
 }
 function bindPeriod() {
+  if (!$('pk')) return;          // মহানগরে সময়ভিত্তিক অংশ নেই
   fillPeriod();
   $('pk').onchange = function () { S.pk = this.value; S.pi = ''; fillPeriod(); };
   $('pi').onchange = function () { S.pi = this.value; };
