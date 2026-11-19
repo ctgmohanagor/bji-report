@@ -48,7 +48,7 @@
     var x = r.extra || {};
     return { id: r.id, org_id: r.org_id, month: monthOf(r.period), status: DBSTAT[r.status], version: r.version,
              comment: r.return_note || '', submitted_at: r.submitted_at || '', parent_id: (A.byId[r.org_id] || {}).parent_id || '',
-             d: { v: r.data || {}, prev: x.prev, cur: x.cur, excluded: x.excluded || [] } };
+             d: { v: r.data || {}, prev: x.prev, cur: x.cur, excluded: x.excluded || [], totals: x.totals || null } };
   }
   var COLS = 'id,org_id,period,status,data,extra,version,return_note,submitted_at';
   async function monthReports(month) {
@@ -121,7 +121,8 @@
     return {
       month: month, monthLabel: monthLabel(month), orgId: me.id, orgName: orgLabel(me),
       status: status, comment: mine ? mine.comment : '',
-      canEdit: editable, canSubmit: editable && !gate.blocked, canPdf: false,
+      canEdit: editable, canSubmit: editable && !gate.blocked,
+      canPdf: status === STATUS.SUBMITTED || status === STATUS.ACCEPTED,
       submitLabel: 'জমা দিন',
       pending: gate.pending.map(function (k) { return k.name; }),
       notIncluded: gate.notIncluded.map(function (k) { return k.name; }),
@@ -197,7 +198,7 @@
         status: rep ? rep.status : 'NONE', comment: rep ? rep.comment : '',
         editable: mine && isEditableStatus(rep ? rep.status : ''),
         canReview: !mine && !!rep && rep.status === STATUS.SUBMITTED && parentId === A.me.id,
-        canPdf: false,
+        canPdf: !!rep && (rep.status === STATUS.SUBMITTED || rep.status === STATUS.ACCEPTED),
         excluded: (d.excluded || []).map(function (id) { var o = A.byId[id]; return o ? orgLabel(o) : 'অজানা'; }),
         fields: renumberSubs_(fields), data: d.v, prev: prev, derived: derived
       };
@@ -254,6 +255,11 @@
         rootFields.forEach(function (f) { if (tot[f.key]) carry.cur[f.key] = tot[f.key].cur; });
       }
       var extra = { prev: carry.prev, cur: carry.cur, excluded: gate.notIncluded.map(function (k) { return k.id; }) };
+      if (me.level === 'W' || me.level === 'T') {
+        // জমার মুহূর্তের মোট (নিজের + একসেপ্টেড অধীনস্থ)। উপরের স্তর নিচে দেখতে না পারলেও (যেমন মহানগর) এ থেকে PDF/মোট পায়।
+        var fresh = await monthReports(month);
+        extra.totals = aggregate(allFields(month), await collectNodes(month, me.id, true, fresh));
+      }
       check(await sb.rpc('submit_report', { p_report: rep.id, p_expected_version: rep.version, p_extra: extra }));
       var after = await monthReports(month);
       return { status: (after[me.id] || {}).status, excluded: gate.notIncluded.map(function (k) { return k.name; }), home: homeData(month, after) };
@@ -298,6 +304,70 @@
                months: months.map(monthLabel), nodeCount: nodes.length, partial: months[months.length - 1] > cur,
                fields: renumberSubs_(fields.filter(function (f) { return values[f.key]; })), values: values,
                gender: org.gender, coverage: coverage };
+    },
+
+    /* PDF এর HTML (ছাপার জন্য)। থানা: ছাপা ফর্মের মতো (paperform.js); ওয়ার্ড/ইউনিট: সাধারণ তালিকা। */
+    _leader: async function (org) {
+      try { return await API._leader2(org); } catch (e) { return ''; }
+    },
+    _leader2: async function (org) {
+      var m = check(await sb.from('memberships').select('user_id').eq('org_id', org.id).eq('role', 'president').eq('active', true));
+      if (!m.length) return '';
+      var p = check(await sb.from('profiles').select('full_name').in('user_id', [m[0].user_id]));
+      return p.length ? (p[0].full_name || '') : '';
+    },
+    _leaderLabel: function (org) { return org.level === 'T' ? 'আমীর/সভাপতি' : (org.gender === 'F' ? 'সভানেত্রী' : 'সভাপতি'); },
+
+    apiPdf: async function (month, orgId) {
+      checkMonth(month);
+      var org = A.byId[orgId || A.me.id];
+      if (!org) throw new Error('পাওয়া যায়নি।');
+      var reps = await monthReports(month), rep = reps[org.id];
+      if (!rep || (rep.status !== STATUS.SUBMITTED && rep.status !== STATUS.ACCEPTED)) throw new Error('রিপোর্ট জমা দেওয়ার পর PDF পাওয়া যাবে।');
+      var fields = allFields(month), d = rep.d, values;
+      // মহানগর থানার নিচে দেখে না: থানার জমার সময়ের মোট ব্যবহার
+      if (A.me.level === 'M' && org.id !== A.me.id && d.totals) values = d.totals;
+      else values = aggregate(fields, await collectNodes(month, org.id, true, reps));
+      var texts = {};
+      fields.forEach(function (f) { if (f.pattern === 'TXT' && d.v[f.key] && d.v[f.key].txt) texts[f.key] = d.v[f.key].txt; });
+      var parent = org.parent_id ? A.byId[org.parent_id] : null;
+      var excl = (d.excluded || []).map(function (id) { var o = A.byId[id]; return o ? orgLabel(o) : 'অজানা'; });
+      var leader = await API._leader(org), font = { kind: 'sans', web: true };
+      setPdfShowZero_('0');
+      var html = org.level === 'T' ? buildPaperHtml({
+        orgName: org.name, district: 'চট্টগ্রাম মহানগরী', kind: 'মাসিক',
+        monthName: MONTHS_BN[parseInt(month.split('-')[1], 10) - 1], year: bn(month.split('-')[0]),
+        values: values, coverage: excl.length ? [{ label: monthLabel(month), missing: excl }] : [],
+        fontSize: 9.5, pageBreaks: true, leader: leader, leaderLabel: API._leaderLabel(org), font: font, sign: true
+      }) : buildReportHtml({
+        leader: leader, leaderLabel: API._leaderLabel(org), font: font, sign: true,
+        levelLabel: { U: 'ইউনিট', W: 'ওয়ার্ড', T: 'থানা', M: 'মহানগর' }[org.level], orgName: orgLabel(org), parentName: parent ? parent.name : '',
+        monthLabel: monthLabel(month), gender: org.gender,
+        fields: fields.filter(function (f) { return f.enter.indexOf(org.level) >= 0 || org.level !== 'U'; }),
+        values: values, texts: texts, excluded: excl
+      });
+      return { html: html, filename: 'report_' + org.code + '_' + month };
+    },
+
+    apiPeriodPdf: async function (year, kind, idx, orgId) {
+      var r = await API.apiPeriod(year, kind, idx, orgId), org = A.byId[orgId || A.me.id];
+      var months = periodMonths(year, kind, idx);
+      var m1 = parseInt(months[0].split('-')[1], 10), m2 = parseInt(months[months.length - 1].split('-')[1], 10);
+      var leader = await API._leader(org), font = { kind: 'sans', web: true }, parent = org.parent_id ? A.byId[org.parent_id] : null;
+      setPdfShowZero_('0');
+      var html = org.level === 'T' ? buildPaperHtml({
+        orgName: org.name, district: 'চট্টগ্রাম মহানগরী', kind: kind === 'Y' ? 'বার্ষিক' : r.kindName,
+        monthName: MONTHS_BN[m1 - 1] + ' – ' + MONTHS_BN[m2 - 1], year: bn(year),
+        values: r.values, coverage: r.coverage, fontSize: 9.5, pageBreaks: true,
+        leader: leader, leaderLabel: API._leaderLabel(org), font: font, sign: true
+      }) : buildReportHtml({
+        leader: leader, leaderLabel: API._leaderLabel(org), font: font, sign: true,
+        levelLabel: { U: 'ইউনিট', W: 'ওয়ার্ড', T: 'থানা', M: 'মহানগর' }[org.level], orgName: orgLabel(org), parentName: parent ? parent.name : '',
+        monthLabel: r.periodLabel, periodKind: r.kindName, periodTitle: 'সময়কাল', gender: org.gender,
+        fields: r.fields.filter(function (f) { return f.enter.indexOf(org.level) >= 0 || org.level !== 'U'; }),
+        values: r.values, texts: {}, excluded: [], coverage: r.coverage
+      });
+      return { html: html, filename: 'report_' + org.code + '_' + year + '_' + kind + (kind === 'Y' ? '' : idx) };
     },
 
     logout: async function () {

@@ -54,14 +54,21 @@ function modal(o) {
   });
 }
 
-/* PDF: সার্ভার base64 দেয়; এখানে ফাইল বানিয়ে ব্যবহারকারীর ট্যাপে খোলা/ডাউনলোড হয় */
+/* PDF: ছাপার পাতা নতুন ট্যাবে খোলে; সেখান থেকে "প্রিন্ট / PDF সংরক্ষণ"।
+   ট্যাবটা ক্লিকের সাথে সাথেই খোলা হয় (নইলে ব্রাউজার পপআপ আটকায়), তারপর লেখা বসে। */
 function showPdf(promise) {
+  var w = window.open('', '_blank');
+  if (w) w.document.write('<p style="font-family:sans-serif;padding:20px">PDF তৈরি হচ্ছে…</p>');
   promise.then(function (r) {
-    var bin = atob(r.base64), bytes = new Uint8Array(bin.length);
-    for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-    var url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
-    modal({ title: 'PDF তৈরি হয়েছে', text: 'নিচের বাটনে চাপ দিয়ে খুলুন বা ডাউনলোড করুন।', noOk: true, link: { href: url, name: r.filename, label: 'PDF খুলুন / ডাউনলোড' } });
-  }).catch(fail);
+    var bar = '<div class="noprint" style="position:sticky;top:0;background:#1f6f5c;color:#fff;padding:10px;font-family:sans-serif;display:flex;gap:10px;align-items:center;flex-wrap:wrap">' +
+      '<button onclick="window.print()" style="font-size:16px;padding:8px 14px;border:0;border-radius:6px;background:#fff;color:#1f6f5c;font-weight:bold">প্রিন্ট / PDF হিসেবে সংরক্ষণ</button>' +
+      '<span style="font-size:13px">প্রিন্টের পর্দায় "Save as PDF" বাছুন</span></div>';
+    var html = r.html.replace('</style>', '@media print{.noprint{display:none!important}}</style>')
+                     .replace(/<head>/, '<head><title>' + esc(r.filename) + '</title><meta name="viewport" content="width=device-width, initial-scale=1">')
+                     .replace(/<body>/, '<body>' + bar);
+    if (!w || w.closed) { toast('পপআপ আটকে গেছে। ব্রাউজারে এই সাইটের পপআপ চালু করুন।', true); return; }
+    w.document.open(); w.document.write(html); w.document.close();
+  }).catch(function (e) { if (w && !w.closed) w.close(); fail(e); });
 }
 function downloadPdf(orgId) { showPdf(call('apiPdf', S.token, S.month, orgId)); }
 function downloadPeriodPdf(orgId) { showPdf(call('apiPeriodPdf', S.token, S.year, S.pk, S.pk === 'Y' ? 1 : S.pi, orgId)); }
