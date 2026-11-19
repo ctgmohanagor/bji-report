@@ -47,7 +47,7 @@
 
   // ---- অবস্থা ----
   let S = null;       // লোড করা তথ্য
-  const ui = { open: new Set(), form: null, link: null };   // খোলা সংগঠন, খোলা ফর্ম, সদ্য বানানো লিংক
+  const ui = { open: new Set(), form: null, link: null, editName: false };   // খোলা সংগঠন, খোলা ফর্ম, সদ্য বানানো লিংক
 
   // ---- লগইন/লগআউট ----
   async function login() {
@@ -207,6 +207,11 @@
     </div>`;
   }
 
+  function myName() {
+    const p = S.profiles.get(S.user.id);
+    return (p && p.full_name) || S.user.user_metadata?.full_name || S.user.email;
+  }
+
   function draw() {
     $user.innerHTML = `<button class="small" data-act="logout">লগআউট</button>`;
     if (!S.mine.length) { $app.innerHTML = noRoleHtml(); return; }
@@ -217,7 +222,12 @@
         ${first ? `<a class="btn primary" href="report.html?org=${encodeURIComponent(m.org.id)}">মাসিক রিপোর্ট</a>` : ''}</div>`;
     }).join('');
     $app.innerHTML = `
-      <div class="card"><h2>${esc(S.user.user_metadata?.full_name || S.user.email)}</h2>${mineHtml}</div>
+      <div class="card"><h2>${esc(myName())}</h2>
+        ${ui.editName ? `<label>আপনার নাম (রিপোর্ট/PDF এ এটাই ছাপা হবে)</label>
+          <input id="myName" maxlength="80" value="${esc(myName())}">
+          <div class="actions"><button class="primary" data-act="saveName">সংরক্ষণ</button><button data-act="cancelName">বাতিল</button></div>`
+        : `<p class="muted" style="margin-top:0">রিপোর্ট/PDF এ এই নাম ছাপা হবে। <button class="small" data-act="editName">নাম বদলান</button></p>`}
+        ${mineHtml}</div>
       ${joinRequestsHtml()}
       <div class="card"><h2>সংগঠন</h2>
         <p class="muted" style="margin-top:0">নামে চাপলে খুলবে। দায়িত্বশীল খালি থাকলে "নিমন্ত্রণ" চাপুন।</p>
@@ -339,6 +349,14 @@
     }),
     approve: (b) => run(b, async () => { await rpc('decide_join', { p_request: b.dataset.req, p_approve: true }); showMsg('অনুমোদন দেওয়া হয়েছে।', 'ok'); await refresh(); }),
     reject: (b) => run(b, async () => { await rpc('decide_join', { p_request: b.dataset.req, p_approve: false }); await refresh(); }),
+    editName: () => { ui.editName = true; draw(); const i = document.getElementById('myName'); if (i) i.focus(); },
+    cancelName: () => { ui.editName = false; draw(); },
+    saveName: (b) => run(b, async () => {
+      const n = document.getElementById('myName').value.trim();
+      if (n.length < 2) { showMsg('নাম লিখুন।'); return; }
+      await rpc('set_my_name', { p_name: n });
+      ui.editName = false; showMsg('নাম সংরক্ষিত হয়েছে।', 'ok'); await refresh();
+    }),
     requestJoin: (b) => run(b, async () => {
       const code = document.getElementById('jrCode').value.trim().toLowerCase();
       if (!/^[a-z0-9]{2,32}$/.test(code)) { showMsg('সঠিক কোড লিখুন (যেমন t05w03u2)।'); return; }

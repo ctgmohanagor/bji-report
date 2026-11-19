@@ -338,7 +338,7 @@
         orgName: org.name, district: 'চট্টগ্রাম মহানগরী', kind: 'মাসিক',
         monthName: MONTHS_BN[parseInt(month.split('-')[1], 10) - 1], year: bn(month.split('-')[0]),
         values: values, coverage: excl.length ? [{ label: monthLabel(month), missing: excl }] : [],
-        fontSize: 9.5, pageBreaks: true, leader: leader, leaderLabel: API._leaderLabel(org), font: font, sign: true
+        fontSize: 11, pageBreaks: true, leader: leader, leaderLabel: API._leaderLabel(org), font: font, sign: true
       }) : buildReportHtml({
         leader: leader, leaderLabel: API._leaderLabel(org), font: font, sign: true,
         levelLabel: { U: 'ইউনিট', W: 'ওয়ার্ড', T: 'থানা', M: 'মহানগর' }[org.level], orgName: orgLabel(org), parentName: parent ? parent.name : '',

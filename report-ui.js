@@ -62,7 +62,7 @@ function showPdf(promise) {
   promise.then(function (r) {
     var bar = '<div class="noprint" style="position:sticky;top:0;background:#1f6f5c;color:#fff;padding:10px;font-family:sans-serif;display:flex;gap:10px;align-items:center;flex-wrap:wrap">' +
       '<button onclick="window.print()" style="font-size:16px;padding:8px 14px;border:0;border-radius:6px;background:#fff;color:#1f6f5c;font-weight:bold">প্রিন্ট / PDF হিসেবে সংরক্ষণ</button>' +
-      '<span style="font-size:13px">প্রিন্টের পর্দায় "Save as PDF" বাছুন</span></div>';
+      '<span style="font-size:13px">প্রিন্টের পর্দায় "Save as PDF" ও কাগজ A4 বাছুন</span></div>';
     var html = r.html.replace('</style>', '@media print{.noprint{display:none!important}}</style>')
                      .replace(/<head>/, '<head><title>' + esc(r.filename) + '</title><meta name="viewport" content="width=device-width, initial-scale=1">')
                      .replace(/<body>/, '<body>' + bar);
