@@ -334,7 +334,11 @@
       var excl = (d.excluded || []).map(function (id) { var o = A.byId[id]; return o ? orgLabel(o) : 'অজানা'; });
       var leader = await API._leader(org), font = { kind: 'sans', web: true };
       setPdfShowZero_('0');
-      var html = org.level === 'T' ? buildPaperHtml({
+      var html = org.level === 'W' ? buildWardPaperHtml({
+        orgName: org.name, parentName: parent ? parent.name : '', female: org.gender === 'F', kind: 'মাসিক',
+        monthName: MONTHS_BN[parseInt(month.split('-')[1], 10) - 1], year: bn(month.split('-')[0]),
+        values: values, fontSize: 10.5, pageBreaks: false, leader: leader, font: font, sign: true
+      }) : org.level === 'T' ? buildPaperHtml({
         orgName: org.name, district: 'চট্টগ্রাম মহানগরী', kind: 'মাসিক',
         monthName: MONTHS_BN[parseInt(month.split('-')[1], 10) - 1], year: bn(month.split('-')[0]),
         values: values, coverage: excl.length ? [{ label: monthLabel(month), missing: excl }] : [],
@@ -355,7 +359,11 @@
       var m1 = parseInt(months[0].split('-')[1], 10), m2 = parseInt(months[months.length - 1].split('-')[1], 10);
       var leader = await API._leader(org), font = { kind: 'sans', web: true }, parent = org.parent_id ? A.byId[org.parent_id] : null;
       setPdfShowZero_('0');
-      var html = org.level === 'T' ? buildPaperHtml({
+      var pkind = kind === 'Y' ? 'বার্ষিক' : r.kindName, pmon = MONTHS_BN[m1 - 1] + ' – ' + MONTHS_BN[m2 - 1];
+      var html = org.level === 'W' ? buildWardPaperHtml({
+        orgName: org.name, parentName: parent ? parent.name : '', female: org.gender === 'F', kind: pkind,
+        monthName: pmon, year: bn(year), values: r.values, fontSize: 10.5, pageBreaks: false, leader: leader, font: font, sign: true
+      }) : org.level === 'T' ? buildPaperHtml({
         orgName: org.name, district: 'চট্টগ্রাম মহানগরী', kind: kind === 'Y' ? 'বার্ষিক' : r.kindName,
         monthName: MONTHS_BN[m1 - 1] + ' – ' + MONTHS_BN[m2 - 1], year: bn(year),
         values: r.values, coverage: r.coverage, fontSize: 9.5, pageBreaks: true,
