@@ -136,7 +136,7 @@
        <button class="small" data-act="revoke" data-inv="${i.id}">বাতিল</button></div>`).join('') : '';
 
     const link = ui.link && ui.link.org === o.id ? `<div class="linkbox">
-        <b>${ROLE[ui.link.role]} এর নিমন্ত্রণ-লিংক</b> (একবার ব্যবহারযোগ্য, ৭ দিন মেয়াদ। লিংকটি আর দেখানো হবে না, এখনই পাঠান):<br>
+        <b>${esc(o.name)} (${LEVEL[o.level]}) এর ${ROLE[ui.link.role]} এর নিমন্ত্রণ-লিংক</b> (একবার ব্যবহারযোগ্য, ৭ দিন মেয়াদ। লিংকটি আর দেখানো হবে না, এখনই পাঠান):<br>
         <span>${esc(ui.link.url)}</span>
         <div class="actions">
           <a class="btn primary" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent(ui.link.text)}">WhatsApp এ পাঠান</a>
@@ -163,7 +163,7 @@
     return `<details class="org" ${open} data-org="${o.id}">
       <summary><span><span class="nm">${esc(o.name)}</span> ${g}${o.active ? '' : ' <span class="tag">নিষ্ক্রিয়</span>'}<br>
         <code>${esc(o.code)} · ${LEVEL[o.level]}</code></span><span class="muted">${kids.length ? bnNum(kids.length) + 'টি অধীনে' : ''}</span></summary>
-      <div class="org-body">${memRows}${invRows}${link}${addForm}
+      <div class="org-body"><div class="muted">${esc(o.name)} এর দায়িত্বশীল:</div>${memRows}${invRows}${link}${addForm}
         ${addBtn ? `<div class="actions">${addBtn}</div>` : ''}
         ${kids.length ? `<div class="children">${kids.map((k) => k.html).join('')}</div>` : ''}
       </div></details>`;
