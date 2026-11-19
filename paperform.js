@@ -17,7 +17,7 @@ function N_(ref, cs, o) { return Object.assign({ v: ref, cs: cs || 1 }, o || {})
 function P_(ref, cs) { return { v: ref, pct: 1, cs: cs || 1 }; }
 function S_(cs, rs) { return { x: 1, cs: cs || 1, rs: rs || 1 }; }
 function B_(cs) { return { e: 1, cs: cs || 1 }; }
-function J_(refs, cs) { return { j: refs, cs: cs || 1 }; }
+function J_(refs, cs, o) { return Object.assign({ j: refs, cs: cs || 1 }, o || {}); }
 function SUM_(refs, cs) { return { s: refs, cs: cs || 1 }; }
 
 /* M3: [মোট, পুরুষ, মহিলা] সারি */
@@ -419,7 +419,8 @@ function pfText_(c, vals) {
   }
   if (c.j) {
     var parts = c.j.map(function (r) { return pfRef_(r, vals); });
-    return parts.every(function (y) { return y === null || y === 0; }) && !PDF_SHOW_ZERO_ ? '' : (parts.every(function (y) { return y === null; }) ? '' : parts.map(function (y) { return bn(round2_(y === null ? 0 : y)); }).join(' / '));
+    var jt = parts.every(function (y) { return y === null || y === 0; }) && !PDF_SHOW_ZERO_ ? '' : (parts.every(function (y) { return y === null; }) ? '' : parts.map(function (y) { return bn(round2_(y === null ? 0 : y)); }).join(' / '));
+    return c.pre ? c.pre + jt : jt;
   }
   return c.t === undefined ? '' : c.t;
 }

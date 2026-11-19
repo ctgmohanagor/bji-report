@@ -337,7 +337,7 @@
       var html = org.level === 'W' ? buildWardPaperHtml({
         orgName: org.name, parentName: parent ? parent.name : '', female: org.gender === 'F', kind: 'মাসিক',
         monthName: MONTHS_BN[parseInt(month.split('-')[1], 10) - 1], year: bn(month.split('-')[0]),
-        values: values, fontSize: 10.5, pageBreaks: false, leader: leader, font: font, sign: true
+        values: values, fontSize: org.gender === 'F' ? 10.5 : 10, pageBreaks: true, leader: leader, font: font, sign: true
       }) : org.level === 'T' ? buildPaperHtml({
         orgName: org.name, district: 'চট্টগ্রাম মহানগরী', kind: 'মাসিক',
         monthName: MONTHS_BN[parseInt(month.split('-')[1], 10) - 1], year: bn(month.split('-')[0]),
@@ -362,7 +362,7 @@
       var pkind = kind === 'Y' ? 'বার্ষিক' : r.kindName, pmon = MONTHS_BN[m1 - 1] + ' – ' + MONTHS_BN[m2 - 1];
       var html = org.level === 'W' ? buildWardPaperHtml({
         orgName: org.name, parentName: parent ? parent.name : '', female: org.gender === 'F', kind: pkind,
-        monthName: pmon, year: bn(year), values: r.values, fontSize: 10.5, pageBreaks: false, leader: leader, font: font, sign: true
+        monthName: pmon, year: bn(year), values: r.values, fontSize: org.gender === 'F' ? 10.5 : 10, pageBreaks: true, leader: leader, font: font, sign: true
       }) : org.level === 'T' ? buildPaperHtml({
         orgName: org.name, district: 'চট্টগ্রাম মহানগরী', kind: kind === 'Y' ? 'বার্ষিক' : r.kindName,
         monthName: MONTHS_BN[m1 - 1] + ' – ' + MONTHS_BN[m2 - 1], year: bn(year),
