@@ -477,11 +477,11 @@ function buildPaperHtml(o) {
     'table.pf td.x{background:#999}table.pf td.nb{border:0}' +
     '.pb{page-break-before:always}.pg{width:190mm;page-break-after:always;break-after:page}.pg:last-of-type{page-break-after:auto;break-after:auto}' +
     '</style></head><body>';
-  h += (pbOn ? '<div class="pg">' : '') + '<p class="c bis">বিসমিল্লাহির রাহমানির রাহীম</p><p class="c title">থানা সংগঠনের রিপোর্ট</p>';
+  h += (pbOn ? '<div class="pg">' : '') + '<p class="c bis">বিসমিল্লাহির রাহমানির রাহীম</p><p class="c title">' + htmlEsc_(o.title || 'থানা সংগঠনের রিপোর্ট') + '</p>';
   h += '<p class="c kind">' + PAPER_KINDS_.map(function (k) { return k === o.kind ? '<u>' + htmlEsc_(k) + '</u>' : htmlEsc_(k); }).join('/') + '</p>';
   h += '<p class="c dist">' + htmlEsc_(o.district || '') + '</p>';
   h += '<table class="plain"><tr><td>মাসের নাম : ' + htmlEsc_(o.monthName || '') + '</td><td class="rt">সন: ' + htmlEsc_(o.year || '') + '</td></tr>' +
-    '<tr><td>উপজেলা/থানার নাম : ' + htmlEsc_(o.orgName || '') + '</td><td class="rt">জেলা/মহানগরী: ' + htmlEsc_(o.district || '') + '</td></tr>' +
+    '<tr><td>' + htmlEsc_(o.orgLabel || 'উপজেলা/থানার নাম') + ' : ' + htmlEsc_(o.orgName || '') + '</td><td class="rt">জেলা/মহানগরী: ' + htmlEsc_(o.district || '') + '</td></tr>' +
     '<tr><td colspan="2">থানা আমীর/সভাপতির নাম : ' + (o.leader ? htmlEsc_(o.leader) : '........................................................') + '</td></tr>' +
     '<tr><td colspan="2">দাওয়াত ও তাবলীগ :</td></tr>' +
     '<tr><td>ক) জনসাধারণের মাঝে সর্বমোট দাওয়াত প্রদান সংখ্যা: ' + htmlEsc_(num('f003.v')) + '</td><td class="rt">মোট জনসংখ্যা: ' + htmlEsc_(num('f004.v')) + '</td></tr>' +
@@ -495,6 +495,9 @@ function buildPaperHtml(o) {
     if (b.table) h += pfTable_(b.table, vals, b.glue);
   });
 
+  (o.coverage || []).forEach(function (c) {
+    if (c.missing && c.missing.length) h += '<p class="n" style="margin-top:6px"><b>' + htmlEsc_(c.label) + ':</b> ' + htmlEsc_(c.missing.join(', ')) + '</p>';
+  });
   h += pdfSignHtml_(o);
   if (pbOn) h += '</div>' + (typeof WARD_FIT_JS_ === 'string' ? WARD_FIT_JS_ : '');
   // বাদ-পড়া সংগঠনের তালিকা PDF-এ ছাপা হয় না (ওয়েব পাতায় দেখানো হয়)

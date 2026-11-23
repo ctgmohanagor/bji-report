@@ -347,7 +347,8 @@ function ownValues(field, d, prev) {
     case 'PM': case 'M3': return { m: g('m'), f: g('f') };
     case 'TB': return { prev: prev || 0, inc: g('inc') };
     case 'CF': case 'CFS':   // CFS: বৃদ্ধি = মানোন্নয়ন + আগত (থানার যোগফলে CF হিসেবেই যোগ হয়)
-      return { prev: prev || 0, inc: g('inc') + g('up') + g('in'), up: g('up'), in: g('in'), dec: g('dec'), target: g('target') };
+      // ওয়ার্ডের কাঁচা তথ্যে inc থাকে না (মানোন্নয়ন+আগত); থানার জমা-মোটে inc আগেই যোগফল, তাই দুবার যোগ নয়
+      return { prev: prev || 0, inc: d.inc !== undefined ? g('inc') : g('up') + g('in'), up: g('up'), in: g('in'), dec: g('dec'), target: g('target') };
     case 'CFN': case 'TBT': case 'YTD': return { prev: prev || 0, inc: g('inc'), target: g('target') };
     case 'ATT2': return { gm: g('gm'), gf: g('gf'), sm: g('sm'), sf: g('sf'), wm: g('sm') * g('am'), wf: g('sf') * g('af') };
     case 'ATTX3': return { c1: g('c1'), c2: g('c2'), c3: g('c3'), w1: g('c1') * g('a1'), w2: g('c2') * g('a2'), w3: g('c3') * g('a3') };

@@ -104,6 +104,58 @@
     return nodes;
   }
 
+  /* ===== মহানগরের সমন্বিত হিসাব =====
+     মহানগর থানার নিচে দেখে না। তাই প্রতিটি থানার জমার সময়ের মোট (extra.totals) যোগ হয়।
+     থানার মোটকে "নোড" ধরে পুরনো যোগফলের নিয়মেই হিসাব (গড় = ওজনযুক্ত, বিগত/বর্তমান ঠিক থাকে)।
+     সিদ্ধান্ত (২৩ নভেম্বর ২০২৬): জমা হওয়া (একসেপ্ট না হলেও) সব থানার সংখ্যা গণ্য। */
+  var METRO_COUNTS = [STATUS.SUBMITTED, STATUS.ACCEPTED];
+  function metroFields(fields) {   // সব স্তরের ঘর নেওয়া হয়; into/autoinc আগেই থানার মোটে হিসাব হয়ে আছে
+    return fields.map(function (f) {
+      var c = {}; Object.keys(f).forEach(function (k) { c[k] = f[k]; });
+      c.enter = f.enter + 'X';
+      c.opt = String(f.opt || '').split(',').filter(function (o) { return o && !/^\s*(into|autoinc):/.test(o); }).join(',');
+      return c;
+    });
+  }
+  function thanaTotalsOf(rep, fields, org) {
+    if (rep.d.totals) return rep.d.totals;
+    // পুরনো রিপোর্ট (মোট সংরক্ষণের আগে জমা): থানার নিজের অংশটুকুই
+    return aggregate(fields, [{ orgId: org.id, level: org.level, gender: org.gender, data: rep.d.v, prev: rep.d.prev || {}, root: true }]);
+  }
+  function metroItems(month, reps, metro) {
+    var fields = allFields(month), got = [], missing = [];
+    childOrgs(metro.id, month).forEach(function (o) {
+      var r = reps[o.id];
+      if (r && METRO_COUNTS.indexOf(r.status) >= 0) got.push({ org: o, month: month, status: r.status, totals: thanaTotalsOf(r, fields, o) });
+      else missing.push(orgLabel(o));
+    });
+    return { items: got, missing: missing };
+  }
+  function metroValues(fields, items, period) {
+    var fx = metroFields(fields), carry = {};
+    fields.forEach(function (f) { if (PATTERNS[f.pattern] && PATTERNS[f.pattern].carry) carry[f.key] = 1; });
+    var nodes = items.map(function (t) {
+      var prev = {};
+      Object.keys(carry).forEach(function (k) { if (t.totals[k] && typeof t.totals[k].prev === 'number') prev[k] = t.totals[k].prev; });
+      return { orgId: t.org.id, month: t.month, level: 'X', gender: 'B', root: true, data: t.totals, prev: prev };
+    });
+    var out = period ? aggregatePeriod(fx, nodes) : aggregate(fx, nodes);
+    // স্বয়ংক্রিয় ঘর (পুরুষ/মহিলা ভাগসহ): থানার হিসাব করা মানই যোগ। অবস্থা-ধরনের (বর্তমান/বিগত) হলে প্রতিটি থানার শেষ মাসেরটা।
+    var lastOf = {};
+    items.forEach(function (t) { if (!lastOf[t.org.id] || t.month > lastOf[t.org.id].month) lastOf[t.org.id] = t; });
+    fields.forEach(function (f) {
+      if (!isAuto_(f)) return;
+      var stock = /\.(cur|prev)/.test(f.src || ''), src = stock ? Object.keys(lastOf).map(function (k) { return lastOf[k]; }) : items;
+      var acc = {}, any = false;
+      src.forEach(function (t) {
+        var v = t.totals[f.key]; if (!v) return;
+        Object.keys(v).forEach(function (c) { if (typeof v[c] === 'number') { acc[c] = round2_((acc[c] || 0) + v[c]); any = true; } });
+      });
+      if (any) out[f.key] = acc; else delete out[f.key];
+    });
+    return out;
+  }
+
   function kidStatuses(parentId, month, reps) {
     return childOrgs(parentId, month).map(function (o) {
       var r = reps[o.id];
@@ -277,6 +329,12 @@
     apiTotals: async function (month, orgId) {
       checkMonth(month);
       var org = A.byId[orgId || A.me.id];
+      if (org.level === 'M') {
+        var mi = metroItems(month, await monthReports(month), org), mf = allFields(month), mv = metroValues(mf, mi.items, false);
+        return { month: month, monthLabel: monthLabel(month), orgName: orgLabel(org), nodeCount: mi.items.length, metro: true,
+                 submittedOnly: mi.items.filter(function (t) { return t.status === STATUS.SUBMITTED; }).map(function (t) { return orgLabel(t.org); }),
+                 missing: mi.missing, fields: renumberSubs_(mf.filter(function (f) { return mv[f.key]; })), values: mv, gender: 'B' };
+      }
       var nodes = await collectNodes(month, org.id, A.me.id === org.id);
       var fields = allFields(month), res = aggregate(fields, nodes);
       return { month: month, monthLabel: monthLabel(month), orgName: orgLabel(org), nodeCount: nodes.length,
@@ -288,6 +346,19 @@
       if (!months.length) throw new Error('সময়কাল ঠিক নয়।');
       if (months[0] > cur) throw new Error('এই সময়কাল এখনও শুরু হয়নি।');
       var org = A.byId[orgId || A.me.id], nodes = [], coverage = [];
+      if (org.level === 'M') {
+        var all = [];
+        for (var j = 0; j < months.length; j++) {
+          if (months[j] > cur) continue;
+          var mi = metroItems(months[j], await monthReports(months[j]), org);
+          all = all.concat(mi.items);
+          coverage.push({ month: months[j], label: monthLabel(months[j]), included: mi.items.length, missing: mi.missing });
+        }
+        var mf = allFields(months[months.length - 1]), mv = metroValues(mf, all, true);
+        return { orgName: orgLabel(org), periodLabel: periodLabel(year, kind, idx), kindName: PERIOD_KINDS[kind].name,
+                 months: months.map(monthLabel), nodeCount: all.length, partial: months[months.length - 1] > cur, metro: true,
+                 fields: renumberSubs_(mf.filter(function (f) { return mv[f.key]; })), values: mv, gender: 'B', coverage: coverage };
+      }
       for (var i = 0; i < months.length; i++) {
         var m = months[i];
         if (m > cur) continue;
@@ -359,6 +430,21 @@
       return { html: html, filename: 'report_' + org.code + '_' + month };
     },
 
+    /* মহানগরের মাসিক সমন্বিত PDF (আপাতত থানার ছকে, শিরোনাম "মহানগরী") */
+    apiMetroPdf: async function (month) {
+      var t = await API.apiTotals(month, A.me.id), org = A.me;
+      setPdfShowZero_('0');
+      var cov = t.missing.length ? [{ label: monthLabel(month) + ' (জমা হয়নি)', missing: t.missing }] : [];
+      if (t.submittedOnly.length) cov.push({ label: 'জমা হয়েছে, একসেপ্ট বাকি', missing: t.submittedOnly });
+      var html = buildPaperHtml({
+        title: 'মহানগরী সংগঠনের রিপোর্ট', orgLabel: 'মহানগরী', orgName: org.name, district: org.name, kind: 'মাসিক',
+        monthName: MONTHS_BN[parseInt(month.split('-')[1], 10) - 1], year: bn(month.split('-')[0]),
+        values: t.values, coverage: cov, fontSize: 11, pageBreaks: true,
+        leader: await API._leader(org), leaderLabel: 'আমীর/সভাপতি', font: { kind: 'sans', web: true }, sign: true
+      });
+      return { html: html, filename: 'report_metro_' + month };
+    },
+
     apiPeriodPdf: async function (year, kind, idx, orgId) {
       var r = await API.apiPeriod(year, kind, idx, orgId), org = A.byId[orgId || A.me.id];
       var months = periodMonths(year, kind, idx);
@@ -369,7 +455,8 @@
       var html = org.level === 'W' ? buildWardPaperHtml({
         orgName: org.name, parentName: parent ? parent.name : '', female: org.gender === 'F', kind: pkind,
         monthName: pmon, year: bn(year), values: r.values, fontSize: org.gender === 'F' ? 10.5 : 10, pageBreaks: true, leader: leader, font: font, sign: true
-      }) : org.level === 'T' ? buildPaperHtml({
+      }) : (org.level === 'T' || org.level === 'M') ? buildPaperHtml({
+        title: org.level === 'M' ? 'মহানগরী সংগঠনের রিপোর্ট' : '', orgLabel: org.level === 'M' ? 'মহানগরী' : '',
         orgName: org.name, district: 'চট্টগ্রাম মহানগরী', kind: kind === 'Y' ? 'বার্ষিক' : r.kindName,
         monthName: MONTHS_BN[m1 - 1] + ' – ' + MONTHS_BN[m2 - 1], year: bn(year),
         values: r.values, coverage: r.coverage, fontSize: 9.5, pageBreaks: true,

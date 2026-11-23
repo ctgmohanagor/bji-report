@@ -221,8 +221,8 @@ function showHome(h, top, bind) {
     else if (h.notIncluded.length && h.canEdit) html += '<div class="note warn">এদের রিপোর্ট একসেপ্ট হয়নি, তাই এদের তথ্য আপনার মোটে ঢুকবে না: ' + esc(h.notIncluded.join(', ')) + '</div>';
     html += '<div class="btns"><button class="btn" id="open">' + (h.canEdit ? 'রিপোর্ট লিখুন' : 'রিপোর্ট দেখুন') + '</button>';
     if (h.canPdf) html += '<button class="btn sec" id="pdf">PDF ডাউনলোড</button>';
-    if (lvl === 'W' || lvl === 'T') html += '<button class="btn sec" id="tot">সমন্বিত রিপোর্ট</button>';
-    html += '</div></div>' + (lvl === 'M' ? '' : periodCard());
+    if (lvl === 'W' || lvl === 'T' || lvl === 'M') html += '<button class="btn sec" id="tot">' + (lvl === 'M' ? 'সব থানার সমন্বিত রিপোর্ট' : 'সমন্বিত রিপোর্ট') + '</button>';
+    html += '</div></div>' + periodCard();
     if (h.children.length) {
       html += '<div class="card"><h2>অধীনস্থ (' + bn(h.children.length) + ')</h2>' + h.children.map(function (k) {
         var can = k.status !== 'NONE';
@@ -506,11 +506,18 @@ function viewForm(orgId) {
 function viewTotals(orgId) {
   call('apiTotals', S.token, S.month, orgId).then(function (t) {
     var rep = { editable: false, data: {}, derived: t.values, gender: t.gender };
-    $('app').innerHTML = '<div class="card"><h2>সমন্বিত রিপোর্ট: ' + esc(t.orgName) + '</h2><small class="mut">' + esc(t.monthLabel) +
-      ' · যোগ হয়েছে ' + bn(t.nodeCount) + 'টি একসেপ্টেড রিপোর্ট (নিজেরটাসহ)</small></div>' +
-      '<div class="card">' + (t.fields.length ? sectionsHtml(t.fields, rep) : '<p>এখনও কোনো একসেপ্টেড রিপোর্ট নেই।</p>') + '</div>' +
-      '<div class="bar"><button class="btn sec" id="bk">← Back</button></div>';
+    var head = t.metro
+      ? '<div class="card"><h2>সব থানার সমন্বিত রিপোর্ট</h2><small class="mut">' + esc(t.monthLabel) + ' · যোগ হয়েছে ' + bn(t.nodeCount) + 'টি থানার রিপোর্ট</small>' +
+        (t.submittedOnly.length ? '<div class="note warn">জমা হয়েছে কিন্তু একসেপ্ট বাকি (তবু যোগ হয়েছে): ' + esc(t.submittedOnly.join(', ')) + '</div>' : '') +
+        (t.missing.length ? '<details class="note warn"><summary>যাদের রিপোর্ট জমা হয়নি (' + bn(t.missing.length) + ')</summary><p style="margin:6px 0 0">' + esc(t.missing.join(', ')) + '</p></details>' : '') + '</div>'
+      : '<div class="card"><h2>সমন্বিত রিপোর্ট: ' + esc(t.orgName) + '</h2><small class="mut">' + esc(t.monthLabel) +
+        ' · যোগ হয়েছে ' + bn(t.nodeCount) + 'টি একসেপ্টেড রিপোর্ট (নিজেরটাসহ)</small></div>';
+    $('app').innerHTML = head +
+      '<div class="card">' + (t.fields.length ? sectionsHtml(t.fields, rep) : '<p>' + (t.metro ? 'এই মাসে কোনো থানার রিপোর্ট জমা হয়নি।' : 'এখনও কোনো একসেপ্টেড রিপোর্ট নেই।') + '</p>') + '</div>' +
+      '<div class="bar"><button class="btn sec" id="bk">← Back</button>' + (t.metro && t.nodeCount ? '<button class="btn sec" id="mpdf">PDF</button>' : '') + '</div>';
+    window.scrollTo(0, 0);
     $('bk').onclick = viewHome;
+    if ($('mpdf')) $('mpdf').onclick = function () { showPdf(call('apiMetroPdf', S.token, S.month)); };
   }).catch(fail);
 }
 
@@ -521,7 +528,7 @@ function viewPeriod(orgId) {
     var gaps = t.coverage.filter(function (c) { return c.missing.length; }), gapN = 0;
     gaps.forEach(function (c) { gapN += c.missing.length; });
     var html = '<div class="card"><h2>' + esc(t.kindName) + ' সমন্বিত রিপোর্ট: ' + esc(t.orgName) + '</h2><small class="mut">' + esc(t.periodLabel) +
-      ' · যোগ হয়েছে ' + bn(t.nodeCount) + 'টি একসেপ্টেড মাসিক রিপোর্ট</small>';
+      ' · যোগ হয়েছে ' + bn(t.nodeCount) + (t.metro ? 'টি থানার মাসিক রিপোর্ট (জমা ও একসেপ্টেড)' : 'টি একসেপ্টেড মাসিক রিপোর্ট') + '</small>';
     if (t.partial) html += '<div class="note warn">এই সময়কাল এখনও শেষ হয়নি। এখন পর্যন্ত একসেপ্টেড রিপোর্টের যোগফল দেখানো হচ্ছে।</div>';
     if (gaps.length) html += '<details class="note warn"><summary>যাদের মাসিক তথ্য অন্তর্ভুক্ত হয়নি (' + bn(gapN) + ')</summary>' +
       gaps.map(function (c) { return '<p style="margin:6px 0 0"><b>' + esc(c.label) + ':</b> ' + esc(c.missing.join(', ')) + '</p>'; }).join('') + '</details>';
