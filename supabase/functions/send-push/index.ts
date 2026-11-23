@@ -2,11 +2,20 @@
 // Supabase ড্যাশবোর্ডে Edge Function হিসেবে বসাতে হবে, "Verify JWT" বন্ধ।
 // এর কোনো ইনপুট নেই: যে-ই ডাকুক, শুধু সারিতে আগে থেকে থাকা নোটিফিকেশন যায় (সারিতে রাখা যায় শুধু ডেটাবেসের নিয়ম মেনে)।
 // গোপন মান (Edge Function Secrets): VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT
-// SUPABASE_URL ও SUPABASE_SERVICE_ROLE_KEY Supabase নিজে দেয়।
+// SUPABASE_URL ও সার্ভারের চাবি (SUPABASE_SECRET_KEYS / SUPABASE_SERVICE_ROLE_KEY) Supabase নিজে দেয়।
 import webpush from "npm:web-push@3.6.7";
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
 
-const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
+// সার্ভারের চাবি: নতুন ব্যবস্থায় SUPABASE_SECRET_KEYS (JSON), পুরনোতে SUPABASE_SERVICE_ROLE_KEY
+function serverKey(): string {
+  try {
+    const j = JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") ?? "{}");
+    const k = j.default ?? Object.values(j)[0];
+    if (typeof k === "string" && k) return k;
+  } catch (_) { /* পুরনোটা দেখা হবে */ }
+  return Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+}
+const sb = createClient(Deno.env.get("SUPABASE_URL")!, serverKey(), {
   auth: { persistSession: false },
 });
 webpush.setVapidDetails(
