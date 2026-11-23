@@ -212,27 +212,49 @@
     return (p && p.full_name) || S.user.user_metadata?.full_name || S.user.email;
   }
 
-  function draw() {
-    $user.innerHTML = `<button class="small" data-act="logout">লগআউট</button>`;
-    if (!S.mine.length) { $app.innerHTML = noRoleHtml(); return; }
-    const seenOrg = new Set();
-    const mineHtml = S.mine.map((m) => {
-      const first = !seenOrg.has(m.org.id); seenOrg.add(m.org.id);
-      return `<div class="row"><span>${LEVEL[m.org.level]}: ${esc(m.org.name)} <code>${esc(m.org.code)}</code><br><b>${ROLE[m.role]}</b></span>
-        ${first ? `<a class="btn primary" href="report.html?org=${encodeURIComponent(m.org.id)}">মাসিক রিপোর্ট</a>` : ''}</div>`;
-    }).join('');
-    $app.innerHTML = `
-      <div class="card"><h2>${esc(myName())}</h2>
-        ${ui.editName ? `<label>আপনার নাম (রিপোর্ট/PDF এ এটাই ছাপা হবে)</label>
-          <input id="myName" maxlength="80" value="${esc(myName())}">
+  // হ্যাশ অনুযায়ী পাতা: #org = সংগঠন, #profile = প্রোফাইল; কিছু না থাকলে হোমে (রিপোর্ট পাতা) পাঠানো
+  const viewOf = () => (location.hash === '#profile' ? 'profile' : location.hash === '#org' ? 'org' : '');
+  const ROLE_T = (m) => m.role === 'president' && (m.org.level === 'T' || m.org.level === 'M') ? 'আমীর/সভাপতি'
+    : m.role === 'president' && m.org.gender === 'F' ? 'সভানেত্রী' : ROLE[m.role];
+
+  function profileHtml() {
+    const seen = new Set();
+    const mine = S.mine.filter((m) => { if (seen.has(m.org.id)) return false; seen.add(m.org.id); return true; });
+    const cur = window.BJI_NAV ? BJI_NAV.org() : '';
+    const rows = mine.map((m) => `<div class="row"><span>${esc(m.org.name)}${GENDER[m.org.gender] && m.org.level !== 'T' ? ' (' + GENDER[m.org.gender] + ')' : ''}<br>
+        <span class="muted">${LEVEL[m.org.level]} · ${ROLE_T(m)}</span></span>
+        ${m.org.id === cur ? '<span class="tag">খোলা আছে</span>' : `<a class="btn small" href="report.html?org=${encodeURIComponent(m.org.id)}#home">খুলুন</a>`}</div>`).join('');
+    const nm = myName();
+    return `
+      <div class="card pcard"><div class="avatar" aria-hidden="true">${esc(nm.trim().charAt(0) || '?')}</div>
+        <div><h2 style="margin:0">${esc(nm)}</h2><span class="muted">${esc(S.user.email)}</span></div></div>
+      <div class="card"><h2>রিপোর্ট ও PDF এ যে নাম ছাপা হবে</h2>
+        ${ui.editName ? `<label for="myName">আপনার নাম</label>
+          <input id="myName" maxlength="80" value="${esc(nm)}">
           <div class="actions"><button class="primary" data-act="saveName">সংরক্ষণ</button><button data-act="cancelName">বাতিল</button></div>`
-        : `<p class="muted" style="margin-top:0">রিপোর্ট/PDF এ এই নাম ছাপা হবে। <button class="small" data-act="editName">নাম বদলান</button></p>`}
-        ${mineHtml}</div>
+        : `<div class="row"><span>${esc(nm)}</span><button class="small" data-act="editName">নাম বদলান</button></div>`}</div>
+      <div class="card"><h2>আমার দায়িত্ব</h2>${rows}</div>
+      <div class="card"><button class="danger full" data-act="logout">লগআউট</button></div>`;
+  }
+
+  function draw() {
+    $user.innerHTML = '';
+    const view = viewOf();
+    if (!S.mine.length) { $user.innerHTML = `<button class="small" data-act="logout">লগআউট</button>`; $app.innerHTML = noRoleHtml(); return; }
+    if (!view) {   // লগইনের পর সরাসরি হোম
+      const o = (window.BJI_NAV && BJI_NAV.org()) || '';
+      const ok = S.mine.some((m) => m.org.id === o);
+      location.replace('report.html' + (ok ? '?org=' + encodeURIComponent(o) : '') + '#home');
+      return;
+    }
+    if (window.BJI_NAV) BJI_NAV.render(view === 'profile' ? 'me' : 'org');
+    $app.innerHTML = view === 'profile' ? profileHtml() : `
       ${joinRequestsHtml()}
       <div class="card"><h2>সংগঠন</h2>
         <p class="muted" style="margin-top:0">নামে চাপলে খুলবে। দায়িত্বশীল খালি থাকলে "নিমন্ত্রণ" চাপুন।</p>
         ${treeHtml()}</div>`;
   }
+  window.addEventListener('hashchange', () => { if (S) { showMsg(''); draw(); } });
 
   function drawLoggedOut() {
     $user.innerHTML = '';

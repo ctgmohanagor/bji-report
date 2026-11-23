@@ -75,7 +75,7 @@ function downloadPeriodPdf(orgId) { showPdf(call('apiPeriodPdf', S.token, S.year
 
 /* ================= লগইন ও হেডার মেনু ================= */
 function setHeader() {
-  $('hd').style.display = S.me ? 'flex' : 'none';
+  if (!S.me) $('hd').style.display = 'none';
   if (S.me) { $('hname').textContent = S.me.name; $('hemail').textContent = S.email || ''; }
   menuOpen(false); setHH();
 }
@@ -181,63 +181,106 @@ function bindPeriod() {
   };
 }
 
-function viewHome() {
-  S.month = S.mon ? S.year + '-' + S.mon : '';
-  var top = '<div class="card"><div class="two"><div><label>সেশন</label><select id="yr">' +
+/* ---- পাতার কাঠামো: হোম/রিপোর্ট ট্যাবে নিচের মেনু; ফর্ম/সমন্বিত দেখার সময় উপরের সরু শিরোনাম ---- */
+function chrome(mode) {
+  var work = mode === 'work';
+  $('hd').style.display = work && S.me ? 'flex' : 'none';
+  if (window.BJI_NAV) { if (work) BJI_NAV.show(false); else BJI_NAV.render(S.view === 'reports' ? 'rep' : 'home', S.me && S.me.orgId); }
+  if (work) setHH();
+}
+var CHILDS = { M: 'থানা', T: 'ওয়ার্ড', W: 'ইউনিট' };
+function roleLabel() {
+  var me = S.me, r = me.role;
+  if (r === 'admin') return 'অ্যাডমিন';
+  if (r === 'secretary') return 'সেক্রেটারি';
+  if (me.level === 'T' || me.level === 'M') return 'আমীর/সভাপতি';
+  return me.gender === 'F' ? 'সভানেত্রী' : 'সভাপতি';
+}
+function orgTitle() {
+  var me = S.me, g = (me.level === 'W' || me.level === 'U') && single(me.gender) ? ' (' + (me.gender === 'F' ? 'মহিলা' : 'পুরুষ') + ')' : '';
+  return (me.orgName || me.name) + g + (me.parentName ? ' - ' + me.parentName : '');
+}
+function kidCounts(h) {
+  var c = { ACCEPTED: 0, SUBMITTED: 0, OTHER: 0 };
+  h.children.forEach(function (k) { if (k.status === 'ACCEPTED') c.ACCEPTED++; else if (k.status === 'SUBMITTED') c.SUBMITTED++; else c.OTHER++; });
+  return c;
+}
+function heroHtml(h) {
+  var me = S.me, html = '<section class="hero"><div class="hbar"><div class="logo" aria-hidden="true">' +
+    '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg></div>' +
+    '<div class="htx"><b>মাসিক রিপোর্ট</b><span>' + esc(h.monthLabel) + '</span></div></div>' +
+    '<p class="hi">আসসালামু আলাইকুম</p><h1 class="hname">' + esc(orgTitle()) + '</h1>' +
+    '<p class="hrole">' + esc(roleLabel()) + (me.userName ? ' - ' + esc(me.userName) : '') + '</p>';
+  if ((me.level === 'T' || me.level === 'M') && h.children.length) {
+    var c = kidCounts(h);
+    html += '<div class="stats"><div><b>' + bn(c.ACCEPTED) + '</b><span>একসেপ্টেড</span></div><div><b>' + bn(c.SUBMITTED) + '</b><span>রিভিউ বাকি</span></div>' +
+      '<div><b>' + bn(c.OTHER) + '</b><span>জমা দেয়নি</span></div></div>';
+  }
+  return html + '</section>';
+}
+function monthCardHtml(h) {
+  var lvl = S.me.level, html = '<section class="card mc"><div class="hrow"><span class="mlab">' + esc(h.monthLabel) + ' এর রিপোর্ট</span>' + chip(h.status) + '</div>';
+  if (h.status === 'RETURNED' && h.comment) html += '<div class="note bad"><b>ফেরত পাঠানোর কারণ:</b> ' + esc(h.comment) + '</div>';
+  if (h.pending.length && h.canEdit) html += '<div class="note warn"><b>রিভিউ বাকি:</b> এদের রিপোর্ট একসেপ্ট বা ফেরত না দেওয়া পর্যন্ত ' + esc(h.submitLabel) + ' যাবে না — ' + esc(h.pending.join(', ')) + '</div>';
+  else if (h.notIncluded.length && h.canEdit && h.status !== 'NONE') html += '<div class="note warn">এদের রিপোর্ট একসেপ্ট হয়নি, তাই এদের তথ্য আপনার মোটে ঢুকবে না: ' + esc(h.notIncluded.join(', ')) + '</div>';
+  var main = h.canEdit ? (h.status === 'NONE' ? 'রিপোর্ট লেখা শুরু করুন' : 'রিপোর্ট লেখা চালিয়ে যান') : 'রিপোর্ট দেখুন';
+  html += '<button class="btn big" id="open">' + main + '</button><div class="btns">';
+  if (h.canPdf) html += '<button class="btn sec" id="pdf">PDF</button>';
+  if (lvl === 'W' || lvl === 'T' || lvl === 'M') html += '<button class="btn sec" id="tot">' + (lvl === 'M' ? 'সব থানার সমন্বিত রিপোর্ট' : 'সমন্বিত রিপোর্ট') + '</button>';
+  return html + '</div></section>';
+}
+function kidsHtml(h) {
+  if (!h.children.length) return '';
+  var c = kidCounts(h), nm = CHILDS[S.me.level] || 'অধীনস্থ';
+  return '<section class="card"><div class="hrow" style="justify-content:space-between"><h2>' + nm + 'গুলোর অবস্থা</h2><small class="mut">' +
+    bn(h.children.length) + 'টির ' + bn(c.ACCEPTED) + 'টি একসেপ্টেড</small></div>' + h.children.map(function (k) {
+      var act = k.status === 'SUBMITTED' ? '<button class="btn" data-k="' + k.orgId + '">রিভিউ</button>'
+        : (k.status !== 'NONE' ? '<button class="btn sec" data-k="' + k.orgId + '">দেখুন</button>' : '');
+      return '<div class="row"><div class="nm">' + esc(String(k.name).split(' / ').pop()) + '</div>' + (k.status === 'SUBMITTED' ? '' : chip(k.status)) + act + '</div>';
+    }).join('') + '</section>';
+}
+function reportsTop() {
+  return '<div class="card"><h2>রিপোর্ট</h2><small class="mut">যেকোনো মাসের রিপোর্ট লিখতে বা দেখতে মাস বাছুন</small><div class="two"><div><label for="yr">সেশন</label><select id="yr">' +
     S.sessions.map(function (y) { return '<option value="' + y + '"' + (y === S.year ? ' selected' : '') + '>' + bn(y) + '</option>'; }).join('') +
-    '</select></div><div><label>মাস</label><select id="mn">' + monthOptions() + '</select></div></div></div>';
-  var bind = function () {
-    $('yr').onchange = function () { S.year = this.value; if (S.mon && S.year + '-' + S.mon > S.currentMonth) S.mon = ''; viewHome(); };
-    $('mn').onchange = function () { S.mon = this.value; viewHome(); };
-    bindPeriod();
-  };
-  if (!S.month) {   // মাস বাছা না হওয়া পর্যন্ত সার্ভারকে ডাকার দরকার নেই
-    $('app').innerHTML = top + '<div class="card"><div class="note warn" style="margin:0">মাসের রিপোর্ট লিখতে বা দেখতে উপর থেকে মাস নির্বাচন করুন।</div></div>' + periodCard();
-    bind();
+    '</select></div><div><label for="mn">মাস</label><select id="mn">' + monthOptions() + '</select></div></div></div>';
+}
+function bindReportsTop() {
+  if (!$('yr')) return;
+  $('yr').onchange = function () { S.year = this.value; if (S.mon && S.year + '-' + S.mon > S.currentMonth) S.mon = ''; viewHome(); };
+  $('mn').onchange = function () { S.mon = this.value; viewHome(); };
+  bindPeriod();
+}
+function viewHome() {
+  chrome('home');
+  if (S.view !== 'reports') { S.year = S.currentMonth.substr(0, 4); S.mon = S.currentMonth.substr(5, 2); }
+  S.month = S.mon ? S.year + '-' + S.mon : '';
+  if (!S.month) {
+    $('app').innerHTML = reportsTop() + periodCard();
+    bindReportsTop();
     return;
   }
-  call('apiHome', S.token, S.month).then(function (h) { showHome(h, top, bind); }).catch(fail);
+  call('apiHome', S.token, S.month).then(function (h) { showHome(h); }).catch(fail);
 }
 
 /* জমা/একসেপ্ট/ফেরতের উত্তরেই নতুন হোম-ডেটা আসে, তাই আলাদা সার্ভার-ডাক ছাড়াই পাতা আঁকা হয় */
-function showHome(h, top, bind) {
-  if (!top) {
-    S.month = S.mon ? S.year + '-' + S.mon : '';
-    top = '<div class="card"><div class="two"><div><label>সেশন</label><select id="yr">' +
-      S.sessions.map(function (y) { return '<option value="' + y + '"' + (y === S.year ? ' selected' : '') + '>' + bn(y) + '</option>'; }).join('') +
-      '</select></div><div><label>মাস</label><select id="mn">' + monthOptions() + '</select></div></div></div>';
-    bind = function () {
-      $('yr').onchange = function () { S.year = this.value; if (S.mon && S.year + '-' + S.mon > S.currentMonth) S.mon = ''; viewHome(); };
-      $('mn').onchange = function () { S.mon = this.value; viewHome(); };
-      bindPeriod();
-    };
-  }
-  {
-    S.home = h;
-    var lvl = S.me.level, html = top;
-    html += '<div class="card"><div class="hrow"><h2>আমার রিপোর্ট</h2>' + chip(h.status) + '</div>';
-    if (h.status === 'RETURNED' && h.comment) html += '<div class="note bad"><b>ফেরত পাঠানোর কারণ:</b> ' + esc(h.comment) + '</div>';
-    if (h.pending.length && h.canEdit) html += '<div class="note warn"><b>রিভিউ বাকি:</b> এদের রিপোর্ট একসেপ্ট বা ফেরত না দেওয়া পর্যন্ত ' + esc(h.submitLabel) + ' যাবে না — ' + esc(h.pending.join(', ')) + '</div>';
-    else if (h.notIncluded.length && h.canEdit) html += '<div class="note warn">এদের রিপোর্ট একসেপ্ট হয়নি, তাই এদের তথ্য আপনার মোটে ঢুকবে না: ' + esc(h.notIncluded.join(', ')) + '</div>';
-    html += '<div class="btns"><button class="btn" id="open">' + (h.canEdit ? 'রিপোর্ট লিখুন' : 'রিপোর্ট দেখুন') + '</button>';
-    if (h.canPdf) html += '<button class="btn sec" id="pdf">PDF ডাউনলোড</button>';
-    if (lvl === 'W' || lvl === 'T' || lvl === 'M') html += '<button class="btn sec" id="tot">' + (lvl === 'M' ? 'সব থানার সমন্বিত রিপোর্ট' : 'সমন্বিত রিপোর্ট') + '</button>';
-    html += '</div></div>' + periodCard();
-    if (h.children.length) {
-      html += '<div class="card"><h2>অধীনস্থ (' + bn(h.children.length) + ')</h2>' + h.children.map(function (k) {
-        var can = k.status !== 'NONE';
-        return '<div class="row"><div class="nm">' + esc(k.name) + '</div>' + chip(k.status) +
-          (can ? '<button class="btn sec" data-k="' + k.orgId + '" style="margin:0">' + (k.status === 'SUBMITTED' ? 'রিভিউ' : 'দেখুন') + '</button>' : '') + '</div>';
-      }).join('') + '</div>';
-    }
-    $('app').innerHTML = html;
-    bind();
-    $('open').onclick = function () { viewForm(S.me.orgId); };
-    if ($('pdf')) $('pdf').onclick = function () { downloadPdf(S.me.orgId); };
-    if ($('tot')) $('tot').onclick = function () { viewTotals(S.me.orgId); };
-    [].forEach.call(document.querySelectorAll('[data-k]'), function (b) { b.onclick = function () { viewForm(b.getAttribute('data-k')); }; });
-  }
+function showHome(h) {
+  S.home = h; chrome('home');
+  var lvl = S.me.level;
+  $('app').innerHTML = S.view === 'reports'
+    ? reportsTop() + monthCardHtml(h) + kidsHtml(h) + periodCard()
+    : heroHtml(h) + monthCardHtml(h) + kidsHtml(h);
+  window.scrollTo(0, 0);
+  bindReportsTop();
+  $('open').onclick = function () { viewForm(S.me.orgId); };
+  if ($('pdf')) $('pdf').onclick = function () { downloadPdf(S.me.orgId); };
+  if ($('tot')) $('tot').onclick = function () { viewTotals(S.me.orgId); };
+  [].forEach.call(document.querySelectorAll('[data-k]'), function (b) { b.onclick = function () { viewForm(b.getAttribute('data-k')); }; });
 }
+window.addEventListener('hashchange', function () {
+  if (!S.me) return;
+  S.view = location.hash === '#reports' ? 'reports' : 'home';
+  viewHome();
+});
 
 /* ================= রিপোর্টের ফর্ম ================= */
 /* কলামের নাম: ফিল্ডে নিজস্ব নাম থাকলে সেটা (সার্ভারের colLabel_ এর মতোই) */
@@ -451,6 +494,7 @@ function schedulePreview() {
 window.addEventListener('resize', setHH);
 
 function viewForm(orgId) {
+  chrome('work');
   call('apiGetReport', S.token, S.month, orgId).then(function (rep) {
     S.cur = rep; S.tab = 0;
     var html = '<div class="card"><div class="hrow"><h2>' + esc(rep.orgName) + '</h2>' + chip(rep.status) + '</div><p class="subtle">' + esc(rep.monthLabel) + '</p>';
@@ -504,6 +548,7 @@ function viewForm(orgId) {
 
 /* ================= সমন্বিত রিপোর্ট (মাসিক) ================= */
 function viewTotals(orgId) {
+  chrome('work');
   call('apiTotals', S.token, S.month, orgId).then(function (t) {
     var rep = { editable: false, data: {}, derived: t.values, gender: t.gender };
     var head = t.metro
@@ -523,6 +568,7 @@ function viewTotals(orgId) {
 
 /* ================= সমন্বিত রিপোর্ট (ত্রৈমাসিক / ষান্মাসিক / বাৎসরিক) ================= */
 function viewPeriod(orgId) {
+  chrome('work');
   call('apiPeriod', S.token, S.year, S.pk, S.pk === 'Y' ? 1 : S.pi, orgId).then(function (t) {
     var rep = { editable: false, data: {}, derived: t.values, gender: t.gender };
     var gaps = t.coverage.filter(function (c) { return c.missing.length; }), gapN = 0;
@@ -554,9 +600,12 @@ function start() {
   API.init(want).then(function (r) {
     busy(false);
     var ids = r.mine.map(function (o) { return o.id; });
+    if (!want && window.BJI_NAV && ids.indexOf(BJI_NAV.org()) >= 0) want = BJI_NAV.org();
     if (!want && r.mine.length === 1) want = r.mine[0].id;
     if (!want || ids.indexOf(want) < 0) { pickOrg(r.mine); return; }
     API.use(want);
+    if (window.BJI_NAV) BJI_NAV.setOrg(want);
+    S.view = location.hash === '#reports' ? 'reports' : 'home';
     return API.apiBootstrap().then(function (b) { applyBoot(b); afterBoot(); });
   }).catch(function (e) {
     busy(false);

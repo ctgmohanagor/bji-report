@@ -195,7 +195,7 @@
         sb.from('orgs').select('id,code,name,level,gender,parent_id,path,active,start_month').order('path'),
         sb.from('form_versions').select('id,valid_from,fields')
       ]);
-      var mem = check(res[0]); A.orgs = check(res[1]); A.versions = check(res[2]);
+      var mem = check(res[0]); A.mem = mem; A.orgs = check(res[1]); A.versions = check(res[2]);
       A.byId = {}; A.orgs.forEach(function (o) { A.byId[o.id] = o; });
       var mine = mem.map(function (m) { return A.byId[m.org_id]; }).filter(Boolean);
       return { mine: mine.map(function (o) { return { id: o.id, name: orgLabel(o), level: o.level }; }), picked: orgId };
@@ -209,7 +209,16 @@
     apiBootstrap: async function () {
       var cm = currentMonth(), sessions = sessionList('2026,2027', cm.split('-')[0]);
       var y = cm.split('-')[0];
-      return { me: { orgId: A.me.id, name: orgLabel(A.me), type: TYPE[A.me.level], gender: A.me.gender, level: A.me.level, mustChange: false },
+      // হোম পাতার জন্য: আমার পদ, আমার নাম, উপরের সংগঠনের নাম
+      var mm = (A.mem || []).filter(function (m) { return m.org_id === A.me.id; })[0], uname = '';
+      try {
+        var pr = check(await sb.from('profiles').select('full_name').in('user_id', [A.user.id]));
+        uname = (pr[0] && pr[0].full_name) || '';
+      } catch (e) { }
+      uname = uname || (A.user.user_metadata && A.user.user_metadata.full_name) || A.user.email;
+      var par = await API._parent(A.me);
+      return { me: { orgId: A.me.id, name: orgLabel(A.me), type: TYPE[A.me.level], gender: A.me.gender, level: A.me.level, mustChange: false,
+                     orgName: A.me.name, role: mm ? mm.role : '', userName: uname, parentName: par ? par.name : '' },
                tabs: tabNames(), patterns: PATTERNS, currentMonth: cm, monthNames: MONTHS_BN, sessions: sessions,
                defaultSession: sessions.indexOf(y) >= 0 ? y : sessions[0], periods: periodOptions(), email: A.user.email };
     },

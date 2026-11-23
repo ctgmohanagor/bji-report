@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>BJI Report · মাসিক রিপোর্ট</title>
+<title>মাসিক রিপোর্ট</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
@@ -24,7 +24,7 @@ h2{margin:0 0 6px;font-size:18px}h3{margin:18px 0 4px;font-size:16px;color:var(-
 label{display:block;font-size:13px;color:var(--mut);margin:10px 0 3px}
 input,select,textarea{width:100%;font:inherit;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink)}
 textarea{min-height:80px}
-.btn{display:inline-block;background:var(--pri);color:var(--pri-ink);border:0;border-radius:8px;padding:7px 12px;font:inherit;font-size:14px;font-weight:600;margin:5px 5px 0 0}
+.btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;background:var(--pri);color:var(--pri-ink);border:0;border-radius:10px;padding:8px 16px;font:inherit;font-size:14.5px;font-weight:600;margin:5px 5px 0 0}
 .lnk{background:none;border:0;color:var(--pri);font:inherit;font-size:14px;padding:8px 4px;text-decoration:underline}
 .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 details.note summary{cursor:pointer;font-weight:600}
@@ -84,6 +84,23 @@ details.note summary{cursor:pointer;font-weight:600}
 #modal{position:fixed;inset:0;background:rgba(0,0,0,.4);display:none;align-items:center;justify-content:center;z-index:40;padding:16px}
 #modal .box{background:var(--card);border-radius:14px;padding:16px;width:100%;max-width:420px}
 small.mut{color:var(--mut)}
+/* ---- হোম ---- */
+.hero{background:var(--pri);color:#fff;margin:-12px -12px 6px;padding:max(16px,env(safe-area-inset-top)) 18px 20px;border-radius:0 0 20px 20px}
+@media (prefers-color-scheme:dark){.hero{background:#17423a}}
+.hbar{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.logo{width:40px;height:40px;border-radius:12px;background:#fff;color:#1f6f5c;display:flex;align-items:center;justify-content:center;flex:none}
+.htx{display:flex;flex-direction:column;line-height:1.3}.htx b{font-size:16px}.htx span{font-size:12.5px;opacity:.85}
+.hero .hi{margin:0;font-size:13px;opacity:.85}
+.hero .hname{margin:2px 0;font-size:21px;line-height:1.35;font-weight:700}
+.hero .hrole{margin:0;font-size:13.5px;opacity:.85}
+.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:14px}
+.stats div{background:rgba(255,255,255,.13);border-radius:12px;padding:10px;display:flex;flex-direction:column}
+.stats b{font-size:22px;line-height:1.2}.stats span{font-size:12px;opacity:.85}
+.card{border-radius:16px}
+.mc .hrow{justify-content:space-between}.mlab{font-size:14.5px;color:var(--mut)}
+.btn.big{display:flex;width:100%;min-height:50px;font-size:16px;margin:14px 0 0}
+.mc .btns{margin-top:8px}.mc .btns .btn{flex:1 1 140px}
+.row .btn{margin:0}
 </style>
 </head>
 <body>
@@ -95,11 +112,12 @@ small.mut{color:var(--mut)}
 <div id="toast"></div>
 <div id="modal"><div class="box" id="mbox"></div></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="config.js?v=15"></script>
-<script src="logic.js?v=15"></script>
-<script src="paperform.js?v=15"></script>
-<script src="wardform.js?v=15"></script>
-<script src="api.js?v=15"></script>
-<script src="report-ui.js?v=15"></script>
+<script src="config.js?v=16"></script>
+<script src="nav.js?v=16"></script>
+<script src="logic.js?v=16"></script>
+<script src="paperform.js?v=16"></script>
+<script src="wardform.js?v=16"></script>
+<script src="api.js?v=16"></script>
+<script src="report-ui.js?v=16"></script>
 </body>
 </html>
