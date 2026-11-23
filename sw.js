@@ -6,7 +6,7 @@ self.addEventListener('push', function (e) {
   var d = {};
   try { d = e.data ? e.data.json() : {}; } catch (x) { d = { body: e.data ? e.data.text() : '' }; }
   e.waitUntil(self.registration.showNotification(d.title || 'মাসিক রিপোর্ট', {
-    body: d.body || '', icon: 'icons/icon-192.png', badge: 'icons/icon-192.png', lang: 'bn',
+    body: d.body || '', icon: 'icons/icon-192.png', badge: 'icons/badge-96.png', lang: 'bn',
     data: { url: d.url || './index.html' }, tag: 'bji-reminder', renotify: true
   }));
 });
