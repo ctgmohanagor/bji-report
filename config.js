@@ -5,5 +5,5 @@ window.BJI_CONFIG = {
   supabaseUrl: 'https://eulieycutgrhifqlnglr.supabase.co',
   supabaseKey: 'sb_publishable_UWaOz95iBLJAnApNTaZIqw_J40_23Bq',
   // ফোনে নোটিফিকেশনের প্রকাশ্য চাবি (VAPID public key; গোপন নয়)। ফাঁকা থাকলে নোটিফিকেশন বন্ধ দেখায়।
-  vapidPublicKey: ''
+  vapidPublicKey: 'BChPsH3YPpEZ3s3H2wrAL8dMe5VhBLbslx8d8nh-jQYGizDsvf7U8YaPJtrcfZomzT-NnQHPqjrbPhEdQkREhnk'
 };
