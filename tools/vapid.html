@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="bn">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>নোটিফিকেশনের চাবি তৈরি</title>
+<style>
+:root{--bg:#f4f6f4;--card:#fff;--ink:#17201c;--mut:#4a5751;--pri:#1f6f5c;--line:#d9e0e5;--warn:#7a4b00;--warn-bg:#fff1d6}
+@media (prefers-color-scheme:dark){:root{--bg:#0f161c;--card:#17212a;--ink:#e8eef2;--mut:#9aa9b4;--pri:#4fbf9f;--line:#2a3843;--warn:#f0c15a;--warn-bg:#3a2d10}}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans Bengali",system-ui,sans-serif;line-height:1.6}
+main{max-width:640px;margin:0 auto;padding:20px 16px 60px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;margin:12px 0}
+h1{font-size:20px;margin:0 0 6px}h2{font-size:16px;margin:0 0 6px}
+button{font:inherit;font-size:15px;min-height:44px;padding:8px 16px;border-radius:10px;border:0;background:var(--pri);color:#fff;font-weight:600;cursor:pointer}
+button.sec{background:transparent;color:var(--pri);border:1.5px solid var(--pri)}
+textarea{width:100%;box-sizing:border-box;font:13px/1.5 ui-monospace,monospace;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);min-height:70px;word-break:break-all}
+.warn{background:var(--warn-bg);color:var(--warn);border-radius:10px;padding:10px 12px;font-size:14px}
+.muted{color:var(--mut);font-size:14px}
+[hidden]{display:none}
+</style>
+</head>
+<body>
+<main>
+  <h1>নোটিফিকেশনের চাবি তৈরি (VAPID)</h1>
+  <p class="muted">এই পাতা চাবি দুটো আপনার ব্রাউজারেই তৈরি করে। কোথাও পাঠায় না, কোথাও জমা রাখে না। পাতা বন্ধ করলেই মুছে যায়। শুধু একবার দরকার।</p>
+  <div class="card">
+    <button id="gen">চাবি তৈরি করুন</button>
+    <p class="muted" id="err" hidden></p>
+  </div>
+  <div id="out" hidden>
+    <div class="card">
+      <h2>১. প্রকাশ্য চাবি (Public key)</h2>
+      <p class="muted">এটা গোপন নয়। Supabase এ <b>VAPID_PUBLIC_KEY</b> নামে বসাবেন, আর Claude কে চ্যাটে পাঠাবেন।</p>
+      <textarea id="pub" readonly></textarea>
+      <button class="sec" data-copy="pub">কপি করুন</button>
+    </div>
+    <div class="card">
+      <h2>২. গোপন চাবি (Private key)</h2>
+      <div class="warn">এটা <b>গোপন</b>। শুধু Supabase এর Edge Function Secrets এ <b>VAPID_PRIVATE_KEY</b> নামে বসাবেন। চ্যাটে, WhatsApp এ বা কাউকে পাঠাবেন না।</div>
+      <textarea id="prv" readonly style="margin-top:10px"></textarea>
+      <button class="sec" data-copy="prv">কপি করুন</button>
+    </div>
+    <p class="muted">দুটো বসানো হয়ে গেলে পাতাটা বন্ধ করুন। আবার "চাবি তৈরি করুন" চাপলে নতুন জোড়া হবে; তখন আগেরটার বদলে দুটোই নতুন করে বসাতে হবে।</p>
+  </div>
+</main>
+<script>
+(function () {
+  function b64u(buf) {
+    var s = '', a = new Uint8Array(buf);
+    for (var i = 0; i < a.length; i++) s += String.fromCharCode(a[i]);
+    return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+  document.getElementById('gen').onclick = async function () {
+    var err = document.getElementById('err');
+    try {
+      var kp = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
+      var raw = await crypto.subtle.exportKey('raw', kp.publicKey);
+      var jwk = await crypto.subtle.exportKey('jwk', kp.privateKey);
+      document.getElementById('pub').value = b64u(raw);
+      document.getElementById('prv').value = jwk.d;
+      document.getElementById('out').hidden = false;
+      err.hidden = true;
+    } catch (e) {
+      err.textContent = 'এই ব্রাউজারে চাবি তৈরি করা গেল না। কম্পিউটারের Chrome এ খুলে চেষ্টা করুন।';
+      err.hidden = false;
+    }
+  };
+  [].forEach.call(document.querySelectorAll('[data-copy]'), function (b) {
+    b.onclick = function () {
+      var t = document.getElementById(b.getAttribute('data-copy'));
+      t.select();
+      (navigator.clipboard ? navigator.clipboard.writeText(t.value) : Promise.reject()).then(function () { b.textContent = 'কপি হয়েছে'; },
+        function () { document.execCommand('copy'); b.textContent = 'কপি হয়েছে'; });
+    };
+  });
+})();
+</script>
+</body>
+</html>

@@ -42,4 +42,51 @@
     document.body.classList.toggle('hasnav', !!on);
   }
   window.BJI_NAV = { render: render, show: show, org: get, setOrg: set };
+
+  /* ---- ফোনে নোটিফিকেশন (Web Push) ---- */
+  function keyBytes(b64) {
+    var pad = '='.repeat((4 - b64.length % 4) % 4), raw = atob((b64 + pad).replace(/-/g, '+').replace(/_/g, '/')), out = new Uint8Array(raw.length);
+    for (var i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+    return out;
+  }
+  var PUSH = {
+    key: function () { return (window.BJI_CONFIG && window.BJI_CONFIG.vapidPublicKey) || ''; },
+    supported: function () { return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window; },
+    ios: function () { return /iPhone|iPad|iPod/.test(navigator.userAgent); },
+    installed: function () { return (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true; },
+    sub: function () {
+      if (!PUSH.supported()) return Promise.resolve(null);
+      return navigator.serviceWorker.getRegistration().then(function (r) { return r ? r.pushManager.getSubscription() : null; });
+    },
+    /* 'nokey' | 'unsupported' | 'ios-install' | 'denied' | 'on' | 'off' */
+    state: function () {
+      if (!PUSH.key()) return Promise.resolve('nokey');
+      if (!PUSH.supported()) return Promise.resolve(PUSH.ios() && !PUSH.installed() ? 'ios-install' : 'unsupported');
+      if (Notification.permission === 'denied') return Promise.resolve('denied');
+      return PUSH.sub().then(function (s) { return s ? 'on' : 'off'; });
+    },
+    save: function (sb, s) {
+      var j = s.toJSON();
+      return sb.rpc('save_push_subscription', { p_endpoint: j.endpoint, p_p256dh: j.keys.p256dh, p_auth: j.keys.auth, p_ua: navigator.userAgent })
+        .then(function (r) { if (r.error) throw r.error; });
+    },
+    enable: function (sb) {
+      return Notification.requestPermission().then(function (p) {
+        if (p !== 'granted') throw new Error('নোটিফিকেশনের অনুমতি দেওয়া হয়নি।');
+        return navigator.serviceWorker.register('sw.js');
+      }).then(function () { return navigator.serviceWorker.ready; })
+        .then(function (reg) { return reg.pushManager.getSubscription().then(function (s) { return s || reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(PUSH.key()) }); }); })
+        .then(function (s) { return PUSH.save(sb, s); });
+    },
+    disable: function (sb) {
+      return PUSH.sub().then(function (s) {
+        if (!s) return;
+        return sb.rpc('delete_push_subscription', { p_endpoint: s.endpoint }).then(function () { return s.unsubscribe(); });
+      });
+    },
+    /* এই ফোনে আগে চালু থাকলে, এখন যিনি লগইন আছেন তাঁর নামে নিশ্চিত করা */
+    resync: function (sb) { return PUSH.sub().then(function (s) { if (s) return PUSH.save(sb, s); }).catch(function () { }); }
+  };
+  window.BJI_PUSH = PUSH;
+  if ('serviceWorker' in navigator) window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () { }); });
 })();

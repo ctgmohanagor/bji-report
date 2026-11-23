@@ -239,6 +239,26 @@ function kidsHtml(h) {
       return '<div class="row"><div class="nm">' + esc(String(k.name).split(' / ').pop()) + '</div>' + (k.status === 'SUBMITTED' ? '' : chip(k.status)) + act + '</div>';
     }).join('') + '</section>';
 }
+/* থানা/মহানগর: জমা না দেওয়া অধীনস্থদের রিমাইন্ডার */
+function remindHtml(h) {
+  var lvl = S.me.level;
+  if (lvl !== 'T' && lvl !== 'M') return '';
+  var left = h.children.filter(function (k) { return k.status !== 'SUBMITTED' && k.status !== 'ACCEPTED'; }).length;
+  if (!left) return '';
+  var nm = CHILDS[lvl];
+  return '<section class="card rem"><div class="hrow"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>' +
+    '<span>' + bn(left) + 'টি ' + nm + ' এখনো ' + esc(h.monthLabel) + ' এর রিপোর্ট জমা দেয়নি।</span></div>' +
+    '<small class="mut" id="remlast">' + (lvl === 'T' ? 'প্রতি মাসের ৫ তারিখে' : 'প্রতি মাসের ১৫ তারিখে') + ' আগের মাসের জন্য স্বয়ংক্রিয় রিমাইন্ডার যায়।</small>' +
+    '<button class="btn sec big" id="remind">বাকি ' + bn(left) + 'টি ' + nm + 'কে মনে করিয়ে দিন</button></section>';
+}
+function fillLastReminder() {
+  if (!$('remlast') || !API.apiLastReminder) return;
+  API.apiLastReminder(S.month).then(function (r) {
+    if (!r || !$('remlast')) return;
+    var d = new Date(r.created_at);
+    $('remlast').textContent = 'শেষ রিমাইন্ডার: ' + bn(d.getDate()) + ' ' + S.monthNames[d.getMonth()] + ', ' + (r.kind === 'auto' ? 'স্বয়ংক্রিয়' : 'হাতে পাঠানো') + ' (' + bn(r.org_count) + 'টি ' + CHILDS[S.me.level] + ')';
+  }).catch(function () { });
+}
 function reportsTop() {
   return '<div class="card"><h2>রিপোর্ট</h2><small class="mut">যেকোনো মাসের রিপোর্ট লিখতে বা দেখতে মাস বাছুন</small><div class="two"><div><label for="yr">সেশন</label><select id="yr">' +
     S.sessions.map(function (y) { return '<option value="' + y + '"' + (y === S.year ? ' selected' : '') + '>' + bn(y) + '</option>'; }).join('') +
@@ -267,14 +287,25 @@ function showHome(h) {
   S.home = h; chrome('home');
   var lvl = S.me.level;
   $('app').innerHTML = S.view === 'reports'
-    ? reportsTop() + monthCardHtml(h) + kidsHtml(h) + periodCard()
-    : heroHtml(h) + monthCardHtml(h) + kidsHtml(h);
+    ? reportsTop() + monthCardHtml(h) + kidsHtml(h) + remindHtml(h) + periodCard()
+    : heroHtml(h) + monthCardHtml(h) + kidsHtml(h) + remindHtml(h);
   window.scrollTo(0, 0);
   bindReportsTop();
   $('open').onclick = function () { viewForm(S.me.orgId); };
   if ($('pdf')) $('pdf').onclick = function () { downloadPdf(S.me.orgId); };
   if ($('tot')) $('tot').onclick = function () { viewTotals(S.me.orgId); };
   [].forEach.call(document.querySelectorAll('[data-k]'), function (b) { b.onclick = function () { viewForm(b.getAttribute('data-k')); }; });
+  if ($('remind')) $('remind').onclick = function () {
+    var btn = this;
+    modal({ title: 'রিমাইন্ডার পাঠাবেন?', text: 'যারা ' + h.monthLabel + ' এর রিপোর্ট এখনো জমা দেয়নি, শুধু তাদের সভাপতি ও সেক্রেটারির ফোনে নোটিফিকেশন যাবে (যারা নোটিফিকেশন চালু করেছেন)।', ok: 'পাঠান' }).then(function (ok) {
+      if (!ok) return;
+      btn.disabled = true;
+      call('apiRemind', S.token, S.month).then(function (r) { toast(bn(r.orgs) + 'টি ' + CHILDS[S.me.level] + 'কে রিমাইন্ডার পাঠানো হয়েছে'); fillLastReminder(); })
+        .catch(function (e) { btn.disabled = false; fail(e); });
+    });
+  };
+  fillLastReminder();
+  if (window.BJI_PUSH) BJI_PUSH.resync(API.sb);
 }
 window.addEventListener('hashchange', function () {
   if (!S.me) return;

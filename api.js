@@ -480,6 +480,21 @@
       return { html: html, filename: 'report_' + org.code + '_' + year + '_' + kind + (kind === 'Y' ? '' : idx) };
     },
 
+    /* রিমাইন্ডার: জমা না দেওয়া অধীনস্থদের ফোনে (0010 send_reminder + Edge Function send-push) */
+    apiRemind: async function (month) {
+      checkMonth(month);
+      var r = await sb.rpc('send_reminder', { p_parent: A.me.id, p_period: month + '-01' });
+      if (r.error) throw new Error(r.error.message);
+      try { await sb.functions.invoke('send-push', { body: {} }); } catch (e) { }   // না গেলেও সময়সূচি ৫ মিনিটে পাঠাবে
+      return { orgs: r.data };
+    },
+    apiLastReminder: async function (month) {
+      var r = await sb.from('reminder_log').select('kind,created_at,org_count').eq('parent_id', A.me.id).eq('period', month + '-01')
+        .order('created_at', { ascending: false }).limit(1);
+      if (r.error) return null;      // 0010 না চালানো থাকলে চুপচাপ
+      return r.data[0] || null;
+    },
+
     logout: async function () {
       try { await sb.auth.signOut({ scope: 'local' }); } catch (e) {}
       location.href = 'index.html';

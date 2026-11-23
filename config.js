@@ -3,5 +3,7 @@
 window.BJI_CONFIG = {
   env: 'staging',
   supabaseUrl: 'https://eulieycutgrhifqlnglr.supabase.co',
-  supabaseKey: 'sb_publishable_UWaOz95iBLJAnApNTaZIqw_J40_23Bq'
+  supabaseKey: 'sb_publishable_UWaOz95iBLJAnApNTaZIqw_J40_23Bq',
+  // ফোনে নোটিফিকেশনের প্রকাশ্য চাবি (VAPID public key; গোপন নয়)। ফাঁকা থাকলে নোটিফিকেশন বন্ধ দেখায়।
+  vapidPublicKey: ''
 };

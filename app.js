@@ -233,6 +233,7 @@
           <input id="myName" maxlength="80" value="${esc(nm)}">
           <div class="actions"><button class="primary" data-act="saveName">সংরক্ষণ</button><button data-act="cancelName">বাতিল</button></div>`
         : `<div class="row"><span>${esc(nm)}</span><button class="small" data-act="editName">নাম বদলান</button></div>`}</div>
+      <div class="card"><h2>রিপোর্টের রিমাইন্ডার</h2><div id="pushBox"><p class="muted">দেখা হচ্ছে…</p></div></div>
       <div class="card"><h2>আমার দায়িত্ব</h2>${rows}</div>
       <div class="card"><button class="danger full" data-act="logout">লগআউট</button></div>`;
   }
@@ -248,6 +249,7 @@
       return;
     }
     if (window.BJI_NAV) BJI_NAV.render(view === 'profile' ? 'me' : 'org');
+    if (window.BJI_PUSH) BJI_PUSH.resync(sb);
     $app.innerHTML = view === 'profile' ? profileHtml() : `
       ${joinRequestsHtml()}
       <div class="card"><h2>সংগঠন</h2>
@@ -255,6 +257,23 @@
         ${treeHtml()}</div>`;
   }
   window.addEventListener('hashchange', () => { if (S) { showMsg(''); draw(); } });
+
+  // ---- প্রোফাইলের নোটিফিকেশন-ঘর ----
+  const PUSH_TXT = {
+    nokey: '<p class="muted">ফোনে রিমাইন্ডার শীঘ্রই চালু হবে।</p>',
+    unsupported: '<p class="muted">এই ব্রাউজারে নোটিফিকেশন চলে না। Android এ Chrome দিয়ে খুলুন।</p>',
+    'ios-install': '<p class="muted">iPhone এ নোটিফিকেশন পেতে আগে Safari এর "শেয়ার" বোতাম থেকে <b>"Add to Home Screen"</b> চাপুন। তারপর হোম-স্ক্রিনের আইকন থেকে অ্যাপ খুলে এখানে চালু করুন।</p>',
+    denied: '<p class="muted">এই ফোনে নোটিফিকেশন আটকানো আছে। ব্রাউজারের সেটিংস → সাইটের অনুমতি → নোটিফিকেশন থেকে চালু করে পাতা নতুন করে খুলুন।</p>',
+    on: '<div class="row"><span><b>চালু আছে</b><br><span class="muted">মাসের রিপোর্ট জমা না হলে এই ফোনে নোটিফিকেশন আসবে।</span></span><button class="small" data-act="pushOff">বন্ধ করুন</button></div>',
+    off: '<p class="muted" style="margin-top:0">চালু করলে মাসের রিপোর্ট জমা না হলে এই ফোনে নোটিফিকেশন আসবে। জমা দেওয়া হয়ে গেলে আসবে না।</p><button class="primary full" data-act="pushOn">নোটিফিকেশন চালু করুন</button>'
+  };
+  async function refreshPush() {
+    const box = document.getElementById('pushBox');
+    if (!box || !window.BJI_PUSH) return;
+    try { box.innerHTML = PUSH_TXT[await BJI_PUSH.state()] || ''; } catch (e) { box.innerHTML = PUSH_TXT.unsupported; }
+  }
+  new MutationObserver(() => { const b = document.getElementById('pushBox'); if (b && !b.dataset.done) { b.dataset.done = '1'; refreshPush(); } })
+    .observe($app, { childList: true });
 
   function drawLoggedOut() {
     $user.innerHTML = '';
@@ -371,6 +390,8 @@
     }),
     approve: (b) => run(b, async () => { await rpc('decide_join', { p_request: b.dataset.req, p_approve: true }); showMsg('অনুমোদন দেওয়া হয়েছে।', 'ok'); await refresh(); }),
     reject: (b) => run(b, async () => { await rpc('decide_join', { p_request: b.dataset.req, p_approve: false }); await refresh(); }),
+    pushOn: (b) => run(b, async () => { await BJI_PUSH.enable(sb); showMsg('নোটিফিকেশন চালু হয়েছে।', 'ok'); await refreshPush(); }),
+    pushOff: (b) => run(b, async () => { await BJI_PUSH.disable(sb); showMsg('এই ফোনে নোটিফিকেশন বন্ধ হয়েছে।', 'ok'); await refreshPush(); }),
     editName: () => { ui.editName = true; draw(); const i = document.getElementById('myName'); if (i) i.focus(); },
     cancelName: () => { ui.editName = false; draw(); },
     saveName: (b) => run(b, async () => {
