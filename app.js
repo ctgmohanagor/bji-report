@@ -235,7 +235,8 @@
         : `<div class="row"><span>${esc(nm)}</span><button class="small" data-act="editName">নাম বদলান</button></div>`}</div>
       <div class="card"><h2>রিপোর্টের রিমাইন্ডার</h2><div id="pushBox"><p class="muted">দেখা হচ্ছে…</p></div></div>
       <div class="card"><h2>আমার দায়িত্ব</h2>${rows}</div>
-      <div class="card"><button class="danger full" data-act="logout">লগআউট</button></div>`;
+      <div class="card"><button class="danger full" data-act="logout">লগআউট</button></div>
+      <p class="muted" style="text-align:center"><a href="privacy.html">গোপনীয়তা নীতি</a></p>`;
   }
 
   function draw() {
@@ -281,7 +282,8 @@
     $app.innerHTML = `<div class="card">
       ${hasInvite ? '<div class="msg ok">আপনি একটি নিমন্ত্রণ-লিংক খুলেছেন। যোগ দিতে নিজের Gmail দিয়ে লগইন করুন।</div>' : '<p style="margin-top:0">নিজের Gmail দিয়ে ঢুকুন।</p>'}
       <button class="primary full" data-act="login">Google দিয়ে লগইন</button>
-      <p class="muted" style="margin-bottom:0">Google যদি বলে "Google hasn't verified this app", তাহলে <b>Continue</b> চাপুন। অ্যাপটি এখন পরীক্ষামূলক অবস্থায় আছে।</p></div>`;
+      <p class="muted" style="margin-bottom:0">Google যদি বলে "Google hasn't verified this app", তাহলে <b>Continue</b> চাপুন। অ্যাপটি এখন পরীক্ষামূলক অবস্থায় আছে।</p></div>
+      <p class="muted" style="text-align:center"><a href="privacy.html">গোপনীয়তা নীতি</a></p>`;
   }
 
   function drawInvite(user) {
