@@ -338,8 +338,8 @@ function viewOpening(orgId) {
     var edit = o.canEdit, fixedOnly = edit && o.locked;
     var html = '<div class="card"><h2>শুরুর সংখ্যা: ' + esc(o.orgName) + '</h2>' +
       '<p class="subtle">অ্যাপে প্রথম মাসিক রিপোর্ট লেখার আগের মাসের শেষে যে সংখ্যা ছিল তা লিখুন। এই সংখ্যাই প্রথম রিপোর্টের "বিগত সংখ্যা" হবে; এরপর প্রতি মাসে শুধু বৃদ্ধি/ঘাটতি লিখলেই হবে।</p>';
-    if (o.locked) html += '<div class="note warn">প্রথম মাসিক রিপোর্ট একসেপ্ট হয়ে গেছে, তাই শুরুর সংখ্যা আটকানো।' +
-      (edit ? ' বদলাতে উপরের স্তরকে "খুলে দিন" বলুন। শুধু মোট জনসংখ্যা বদলানো যায়।' : '') + '</div>';
+    if (o.locked) html += '<div class="note warn"><b>🔒 আটকানো:</b> এই সংগঠনের মাসিক রিপোর্ট একসেপ্ট হয়ে গেছে, তাই শুরুর সংখ্যা আর বদলানো যায় না।' +
+      (edit ? ' বদলাতে উপরের স্তরকে "খুলে দিন" বলুন। শুধু মোট জনসংখ্যা বদলানো যায়।' : (o.canUnlock ? ' নিচের "খুলে দিন" চাপলে আবার লেখা যাবে।' : '')) + '</div>';
     else if (o.hasAccepted) html += '<div class="note warn">খুলে দেওয়া হয়েছে। এখন ঠিক করলে পার্থক্যটুকু পরের মাসের রিপোর্টের "বিগত সংখ্যা" তে যোগ হবে।</div>';
     if (!edit && !o.canUnlock) html += '<div class="note warn">এটি শুধু দেখার জন্য।</div>';
     html += '</div>';
@@ -363,6 +363,12 @@ function viewOpening(orgId) {
     $('app').innerHTML = html;
     window.scrollTo(0, 0);
     $('bk').onclick = function () { if (location.hash === '#opening') history.replaceState(null, '', '#home'); viewHome(); };
+    // আটকানো ঘরে চাপলে কেন লেখা যাচ্ছে না তা বলা (ফোনে কিবোর্ড আসে না বলে)
+    [].forEach.call(document.querySelectorAll('input[data-op][readonly]'), function (i) {
+      i.onclick = function () {
+        toast(!edit ? 'এটি শুধু দেখার জন্য।' : 'শুরুর সংখ্যা আটকানো আছে। বদলাতে উপরের স্তরকে "খুলে দিন" বলুন।', true);
+      };
+    });
     if ($('osv')) $('osv').onclick = function () {
       var d = {}, bad = '';
       [].forEach.call(document.querySelectorAll('input[data-op]'), function (i) {
