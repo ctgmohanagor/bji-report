@@ -422,22 +422,29 @@ function autoTerms_(src) {
   String(src || '').split(';').forEach(function (part) {
     part = part.trim(); if (!part) return;
     var eq = part.indexOf('='), col = eq > 0 ? part.slice(0, eq).trim() : 'v', expr = eq > 0 ? part.slice(eq + 1) : part;
-    outs.push({ col: col, terms: expr.split('+').map(function (t) { return t.trim(); }).filter(Boolean) });
+    // "+" যোগ, "-" বিয়োগ (বিয়োগের পদ "-" দিয়ে শুরু)
+    outs.push({ col: col, terms: expr.replace(/-/g, '+-').split('+').map(function (t) { return t.trim(); }).filter(Boolean) });
   });
   return outs;
 }
 
-function applyAuto(fields, out, gout) {
+/* srcT: থানা/মহানগরের মোটে আলাদা সূত্র। যেমন জনশক্তি: পুরুষ/মহিলা ভাগ মহিলা বিভাগের সারি দিয়ে
+   (রুকন মহিলা = f084, পুরুষ = f079 − f084), কারণ থানার নিজের লেখা সংখ্যার লিঙ্গ আলাদা থাকে না। */
+function applyAuto(fields, out, gout, rootLvl) {
+  var upper = rootLvl === 'T' || rootLvl === 'X' || rootLvl === 'M';
   fields.forEach(function (f) {
-    if (!isAuto_(f) || !f.src) return;
+    var srcF = upper && f.srcT ? f.srcT : f.src;
+    if (!isAuto_(f) || !srcF) return;
     var res = {}, any = false;
-    autoTerms_(f.src).forEach(function (o) {
+    autoTerms_(srcF).forEach(function (o) {
       var sum = 0, found = false;
       o.terms.forEach(function (t) {
+        var sign = 1;
+        if (t.charAt(0) === '-') { sign = -1; t = t.slice(1).trim(); }
         var at = t.split('@'), q = at[0].split('.'), src = out;
         if (at[1]) src = (gout && gout[at[1]]) || {};
         var ob = q[0] ? src[q[0]] : null;
-        if (ob && ob[q[1]] !== undefined && ob[q[1]] !== null) { sum += ob[q[1]]; found = true; }
+        if (ob && ob[q[1]] !== undefined && ob[q[1]] !== null) { sum += sign * ob[q[1]]; found = true; }
       });
       if (found) { res[o.col] = round2_(sum); any = true; }
     });
@@ -556,7 +563,7 @@ function aggregate(fields, nodes) {
   });
   mergeInto_(fields, sums);
   fields.forEach(function (f) { if (sums[f.key]) out[f.key] = finalizeValues(f, sums[f.key]); });
-  return applyAuto(fields, out, genderOut_(fields, nodes, aggregate));
+  return applyAuto(fields, out, genderOut_(fields, nodes, aggregate), rootLvl);
 }
 
 /* ---------- একাধিক মাসের যোগফল (ত্রৈমাসিক/ষান্মাসিক/বাৎসরিক) ----------
@@ -598,7 +605,7 @@ function aggregatePeriod(fields, nodes) {
   });
   mergeInto_(fields, sums);
   fields.forEach(function (f) { if (sums[f.key]) out[f.key] = finalizeValues(f, sums[f.key]); });
-  return applyAuto(fields, out, genderOut_(fields, nodes, aggregatePeriod));
+  return applyAuto(fields, out, genderOut_(fields, nodes, aggregatePeriod), rootLvl);
 }
 
 /* জমা দেওয়ার সময় "বিগত" ও "বর্তমান" জমিয়ে রাখা হয় (পরের মাসের বিগত এখান থেকেই আসে) */
