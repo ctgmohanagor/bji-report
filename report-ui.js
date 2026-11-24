@@ -109,7 +109,8 @@ function applyBoot(b) {
   if (!S.year || S.sessions.indexOf(S.year) < 0) S.year = b.defaultSession;
   setHeader();
 }
-function afterBoot() { if (S.me.mustChange) viewPassword(true); else if (location.hash === '#opening') viewOpening(S.me.orgId); else viewHome(); }
+function afterBoot() { if (S.me.mustChange) viewPassword(true); else if (location.hash.indexOf('#opening') === 0) viewOpening(openingTarget()); else viewHome(); }
+function openingTarget() { var m = /^#opening:(.+)$/.exec(location.hash); return m ? decodeURIComponent(m[1]) : S.me.orgId; }
 
 function boot() {
   call('apiBootstrap', S.token).then(function (b) { applyBoot(b); afterBoot(); })
@@ -237,8 +238,7 @@ function kidsHtml(h) {
   return '<section class="card"><div class="hrow" style="justify-content:space-between"><h2>' + nm + 'গুলোর অবস্থা</h2><small class="mut">' +
     bn(h.children.length) + 'টির ' + bn(c.ACCEPTED) + 'টি একসেপ্টেড</small></div>' + h.children.map(function (k) {
       var act = k.status === 'SUBMITTED' ? '<button class="btn" data-k="' + k.orgId + '">রিভিউ</button>'
-        : (k.status !== 'NONE' ? '<button class="btn sec" data-k="' + k.orgId + '">দেখুন</button>'
-          : '<button class="btn sec" data-o="' + k.orgId + '" title="শুরুর সংখ্যা">শুরুর সংখ্যা</button>');
+        : (k.status !== 'NONE' ? '<button class="btn sec" data-k="' + k.orgId + '">দেখুন</button>' : '');
       return '<div class="row"><div class="nm">' + esc(String(k.name).split(' / ').pop()) + '</div>' + (k.status === 'SUBMITTED' ? '' : chip(k.status)) + act + '</div>';
     }).join('') + '</section>';
 }
@@ -350,7 +350,11 @@ function viewOpening(orgId) {
       (edit && o.fields.length ? '<button class="btn" id="osv">সংরক্ষণ</button>' : '') + '</div>';
     $('app').innerHTML = html;
     window.scrollTo(0, 0);
-    $('bk').onclick = function () { if (location.hash === '#opening') history.replaceState(null, '', '#home'); viewHome(); };
+    $('bk').onclick = function () {
+      if (/^#opening:/.test(location.hash)) { location.href = 'index.html#org'; return; }
+      if (location.hash === '#opening') history.replaceState(null, '', '#home');
+      viewHome();
+    };
     // আটকানো ঘরে চাপলে কেন লেখা যাচ্ছে না তা বলা (ফোনে কিবোর্ড আসে না বলে)
     [].forEach.call(document.querySelectorAll('input[data-op][readonly]'), function (i) {
       i.onclick = function () {
@@ -379,7 +383,7 @@ function viewOpening(orgId) {
 }
 window.addEventListener('hashchange', function () {
   if (!S.me) return;
-  if (location.hash === '#opening') { viewOpening(S.me.orgId); return; }
+  if (location.hash.indexOf('#opening') === 0) { viewOpening(openingTarget()); return; }
   S.view = location.hash === '#reports' ? 'reports' : 'home';
   viewHome();
 });

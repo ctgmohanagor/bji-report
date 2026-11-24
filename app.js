@@ -158,13 +158,17 @@
     const addBtn = canAddChild(o) && !(ui.form && ui.form.org === o.id)
       ? `<button class="small" data-act="openForm" data-org="${o.id}">+ নতুন ${LEVEL[childLv]}</button>` : '';
 
+    // শুরুর সংখ্যা: নিচের স্তরের সংখ্যা দেখা ও আটকানো থাকলে খুলে দেওয়া (রিপোর্ট পাতায়, আমার নিকটতম উপরের দায়িত্ব থেকে)
+    let up = o.parent_id && S.orgById.get(o.parent_id);
+    while (up && !S.mine.some((m) => m.org.id === up.id)) up = up.parent_id && S.orgById.get(up.parent_id);
+    const opBtn = up ? `<a class="btn small" href="report.html?org=${encodeURIComponent(up.id)}#opening:${encodeURIComponent(o.id)}">শুরুর সংখ্যা</a>` : '';
     const open = ui.open.has(o.id) ? 'open' : '';
     const g = GENDER[o.gender] ? `<span class="tag ${o.gender === 'F' ? 'f' : ''}">${GENDER[o.gender]}</span>` : '';
     return `<details class="org" ${open} data-org="${o.id}">
       <summary><span><span class="nm">${esc(o.name)}</span> ${g}${o.active ? '' : ' <span class="tag">নিষ্ক্রিয়</span>'}<br>
         <code>${esc(o.code)} · ${LEVEL[o.level]}</code></span><span class="muted">${kids.length ? bnNum(kids.length) + 'টি অধীনে' : ''}</span></summary>
       <div class="org-body"><div class="muted">${esc(o.name)} এর দায়িত্বশীল:</div>${memRows}${invRows}${link}${addForm}
-        ${addBtn ? `<div class="actions">${addBtn}</div>` : ''}
+        ${addBtn || opBtn ? `<div class="actions">${addBtn}${opBtn}</div>` : ''}
         ${kids.length ? `<div class="children">${kids.map((k) => k.html).join('')}</div>` : ''}
       </div></details>`;
   }
