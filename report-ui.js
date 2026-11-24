@@ -223,11 +223,13 @@ function monthCardHtml(h) {
   if (h.status === 'RETURNED' && h.comment) html += '<div class="note bad"><b>ফেরত পাঠানোর কারণ:</b> ' + esc(h.comment) + '</div>';
   if (h.pending.length && h.canEdit) html += '<div class="note warn"><b>রিভিউ বাকি:</b> এদের রিপোর্ট একসেপ্ট বা ফেরত না দেওয়া পর্যন্ত ' + esc(h.submitLabel) + ' যাবে না — ' + esc(h.pending.join(', ')) + '</div>';
   else if (h.notIncluded.length && h.canEdit && h.status !== 'NONE') html += '<div class="note warn">এদের রিপোর্ট একসেপ্ট হয়নি, তাই এদের তথ্য আপনার মোটে ঢুকবে না: ' + esc(h.notIncluded.join(', ')) + '</div>';
-  var main = h.canEdit ? (h.status === 'NONE' ? 'রিপোর্ট লেখা শুরু করুন' : 'রিপোর্ট লেখা চালিয়ে যান') : 'রিপোর্ট দেখুন';
-  html += '<button class="btn big" id="open">' + main + '</button><div class="btns">';
-  if (h.canPdf) html += '<button class="btn sec" id="pdf">PDF</button>';
-  if (lvl === 'W' || lvl === 'T' || lvl === 'M') html += '<button class="btn sec" id="tot">' + (lvl === 'M' ? 'সব থানার সমন্বিত রিপোর্ট' : 'সমন্বিত রিপোর্ট') + '</button>';
-  return html + '</div></section>';
+  // পাশাপাশি দুই বোতাম: রিপোর্ট লিখুন/দেখুন · সমন্বিত রিপোর্ট; PDF থাকলে নিচে
+  var main = h.canEdit ? 'রিপোর্ট লিখুন' : 'রিপোর্ট দেখুন';
+  html += '<div class="mbtns"><button class="btn" id="open">' + main + '</button>';
+  if (lvl === 'W' || lvl === 'T' || lvl === 'M') html += '<button class="btn sec" id="tot">সমন্বিত রিপোর্ট</button>';
+  html += '</div>';
+  if (h.canPdf) html += '<button class="btn sec" id="pdf" style="width:100%;margin-top:8px">PDF</button>';
+  return html + '</section>';
 }
 function kidsHtml(h) {
   if (!h.children.length) return '';
@@ -307,24 +309,8 @@ function showHome(h) {
     });
   };
   fillLastReminder();
-  if (S.view !== 'reports') openingTodo();
   if (window.BJI_PUSH) BJI_PUSH.resync(API.sb);
 }
-/* শুরুর সংখ্যা বাকি থাকলে হোমে একটা কার্ড (দেওয়া হয়ে গেলে বা প্রথম রিপোর্ট একসেপ্ট হলে আর দেখায় না) */
-function openingTodo() {
-  if (!API.apiOpening) return;
-  API.apiOpening(S.me.orgId).then(function (o) {
-    if (o.locked || o.filled || o.hasAccepted || !o.fields.length || $('optodo')) return;
-    var mc = document.querySelector('.mc'); if (!mc) return;
-    var c = document.createElement('section');
-    c.className = 'card'; c.id = 'optodo';
-    c.innerHTML = '<div class="hrow"><h2 style="margin:0">শুরুর সংখ্যা দিন</h2></div><p class="mut" style="margin:6px 0 10px">রিপোর্ট লেখার আগে একবার: জনশক্তি, ইউনিট, মসজিদ ইত্যাদির এখনকার সংখ্যা। এরপর প্রতি মাসে শুধু বৃদ্ধি/ঘাটতি লিখলেই হবে।</p>' +
-      '<button class="btn big" id="opgo">শুরুর সংখ্যা লিখুন</button>';
-    mc.parentNode.insertBefore(c, mc);
-    $('opgo').onclick = function () { viewOpening(S.me.orgId); };
-  }).catch(function () { });
-}
-
 /* ================= শুরুর সংখ্যা ================= */
 function openingScope(f, lvl) {
   var whole = /rootprev|selfT/.test(f.opt || '');
@@ -617,6 +603,7 @@ function viewForm(orgId) {
     if (rep.status === 'RETURNED' && rep.comment) html += '<div class="note bad"><b>ফেরত পাঠানোর কারণ:</b> ' + esc(rep.comment) + '</div>';
     if (rep.excluded && rep.excluded.length) html += '<div class="note warn"><b>অন্তর্ভুক্ত হয়নি:</b> এদের রিপোর্ট একসেপ্ট হয়নি, তাই এদের তথ্য এই মোটে নেই — ' + esc(rep.excluded.join(', ')) + '</div>';
     if (!rep.editable && !rep.canReview) html += '<div class="note warn">এটি শুধু দেখার জন্য।</div>';
+    if (rep.editable) html += '<div id="ophint"></div>';
     html += '</div>';
     if (!rep.fields.length) html += '<div class="card"><p>এই স্তরের জন্য কোনো ঘর নেই।</p></div>';
     else if (rep.editable) html += tabbedFormHtml(rep.fields, rep);      // তথ্য লেখার সময়ই ৫টি বিভাগের ট্যাব
@@ -632,6 +619,12 @@ function viewForm(orgId) {
     $('bk').onclick = viewHome;
     if ($('pdf')) $('pdf').onclick = function () { downloadPdf(rep.orgId); };
     if ($('opn')) $('opn').onclick = function () { viewOpening(rep.orgId); };
+    // শুরুর সংখ্যা দেওয়া না থাকলে (আর আগে কোনো রিপোর্ট একসেপ্ট না হলে) ফর্মের উপরে ছোট একটা মনে করানো
+    if (rep.editable && API.apiOpening) API.apiOpening(rep.orgId).then(function (o) {
+      if (o.locked || o.filled || o.hasAccepted || !o.fields.length || !$('ophint')) return;
+      $('ophint').innerHTML = '<div class="note warn">শুরুর সংখ্যা এখনো দেওয়া হয়নি, তাই "বিগত সংখ্যা" ০ থেকে শুরু হবে। <a class="lnk" href="#" id="opgo">শুরুর সংখ্যা দিন</a> (প্রোফাইলেও আছে)।</div>';
+      $('opgo').onclick = function (e) { e.preventDefault(); viewOpening(rep.orgId); };
+    }).catch(function () { });
     if (rep.editable) {
       bindTabs(); setHH(); syncBar();
       $('nx').onclick = function () { var j = nextTab(S.tab); if (j >= 0) setTab(j); };
