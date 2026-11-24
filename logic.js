@@ -530,14 +530,20 @@ function mergeInto_(fields, sums) {
 }
 
 /* nodes = [{ level:'U'|'W'|'T', data:{key:{col:val}}, prev:{key:number} }] */
+/* "selfT": থানার মোটে শুধু থানার নিজের লেখা সংখ্যা; ওয়ার্ড/ইউনিটেরটা যোগ হয় না
+   (সিদ্ধান্ত ২৪ নভেম্বর ২০২৬: রুকন সংখ্যা থানা আমীর নিজে বসাবেন; কর্মী/সহযোগী আগের মতো যোগ হয়) */
+function rootLevel_(nodes) { var r = nodes.filter(function (n) { return n.root; })[0]; return r ? r.level : ''; }
+function skipSelf_(f, n, rootLvl) { return rootLvl === 'T' && !n.root && /(^|,)\s*selfT/.test(f.opt || ''); }
+
 function aggregate(fields, nodes) {
   nodes = prepNodes_(fields, nodes);
-  var sums = {}, out = {};
+  var sums = {}, out = {}, rootLvl = rootLevel_(nodes);
   fields.forEach(function (f) {
     if (f.pattern === 'TXT' || isAuto_(f)) return;
     var acc = {}, any = false, rootPrev = /rootprev/.test(f.opt || '');
     nodes.forEach(function (n) {
       if (f.enter.indexOf(n.level) < 0) return;
+      if (skipSelf_(f, n, rootLvl)) return;
       any = true;
       var comp = ownValues(f, (n.data || {})[f.key], (n.prev || {})[f.key]);
       Object.keys(comp).forEach(function (k) {
@@ -563,13 +569,14 @@ function aggregate(fields, nodes) {
    • লেখা (TXT) যোগ হয় না                                                                  */
 function aggregatePeriod(fields, nodes) {
   nodes = prepNodes_(fields, nodes);
-  var sums = {}, out = {};
+  var sums = {}, out = {}, rootLvl = rootLevel_(nodes);
   var sorted = nodes.slice().sort(function (a, b) { return a.month < b.month ? -1 : (a.month > b.month ? 1 : 0); });
   fields.forEach(function (f) {
     if (f.pattern === 'TXT' || isAuto_(f)) return;
     var p = PATTERNS[f.pattern], acc = {}, any = false, started = {}, stock = !!p.carry, state = {}, rootPrev = /rootprev/.test(f.opt || '');
     sorted.forEach(function (n) {
       if (f.enter.indexOf(n.level) < 0) return;
+      if (skipSelf_(f, n, rootLvl)) return;
       any = true;
       var comp = ownValues(f, (n.data || {})[f.key], (n.prev || {})[f.key]);
       Object.keys(comp).forEach(function (k) {
