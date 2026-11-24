@@ -235,7 +235,8 @@ function kidsHtml(h) {
   return '<section class="card"><div class="hrow" style="justify-content:space-between"><h2>' + nm + 'গুলোর অবস্থা</h2><small class="mut">' +
     bn(h.children.length) + 'টির ' + bn(c.ACCEPTED) + 'টি একসেপ্টেড</small></div>' + h.children.map(function (k) {
       var act = k.status === 'SUBMITTED' ? '<button class="btn" data-k="' + k.orgId + '">রিভিউ</button>'
-        : (k.status !== 'NONE' ? '<button class="btn sec" data-k="' + k.orgId + '">দেখুন</button>' : '');
+        : (k.status !== 'NONE' ? '<button class="btn sec" data-k="' + k.orgId + '">দেখুন</button>'
+          : '<button class="btn sec" data-o="' + k.orgId + '" title="শুরুর সংখ্যা">শুরুর সংখ্যা</button>');
       return '<div class="row"><div class="nm">' + esc(String(k.name).split(' / ').pop()) + '</div>' + (k.status === 'SUBMITTED' ? '' : chip(k.status)) + act + '</div>';
     }).join('') + '</section>';
 }
@@ -295,6 +296,7 @@ function showHome(h) {
   if ($('pdf')) $('pdf').onclick = function () { downloadPdf(S.me.orgId); };
   if ($('tot')) $('tot').onclick = function () { viewTotals(S.me.orgId); };
   [].forEach.call(document.querySelectorAll('[data-k]'), function (b) { b.onclick = function () { viewForm(b.getAttribute('data-k')); }; });
+  [].forEach.call(document.querySelectorAll('[data-o]'), function (b) { b.onclick = function () { viewOpening(b.getAttribute('data-o')); }; });
   if ($('remind')) $('remind').onclick = function () {
     var btn = this;
     modal({ title: 'রিমাইন্ডার পাঠাবেন?', text: 'যারা ' + h.monthLabel + ' এর রিপোর্ট এখনো জমা দেয়নি, শুধু তাদের সভাপতি ও সেক্রেটারির ফোনে নোটিফিকেশন যাবে (যারা নোটিফিকেশন চালু করেছেন)।', ok: 'পাঠান' }).then(function (ok) {

@@ -504,7 +504,9 @@
     apiOpening: async function (orgId) {
       var org = A.byId[orgId || A.me.id];
       if (!org) throw new Error('এই সংগঠনটি পাওয়া যায়নি।');
-      var fields = openingFields(fieldsForLevel(allFields(currentMonth()), org.level, org.gender));
+      // মহানগর: থানার ছকের স্থায়ী ঘরগুলো (মহানগর লেখে শুধু থানার বাইরের অংশ)
+      var fields = openingFields(org.level === 'M' ? fieldsForLevel(allFields(currentMonth()), 'T', 'B')
+                                                   : fieldsForLevel(allFields(currentMonth()), org.level, org.gender));
       var op = await getOpening(org.id, true);
       var acc = check(await sb.from('reports').select('id').eq('org_id', org.id).eq('status', 'accepted').limit(1)).length > 0;
       var locked = op.locked || (acc && !op.unlocked);
