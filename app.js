@@ -235,6 +235,8 @@
         : `<div class="row"><span>${esc(nm)}</span><button class="small" data-act="editName">নাম বদলান</button></div>`}</div>
       <div class="card"><h2>রিপোর্টের রিমাইন্ডার</h2><div id="pushBox"><p class="muted">দেখা হচ্ছে…</p></div></div>
       <div class="card"><h2>আমার দায়িত্ব</h2>${rows}</div>
+      ${cur ? `<div class="card"><h2>শুরুর সংখ্যা</h2><p class="muted" style="margin-top:0">জনশক্তি, ইউনিট, মসজিদ ইত্যাদির শুরুর সংখ্যা দেখুন বা লিখুন (প্রথম রিপোর্ট একসেপ্ট হওয়া পর্যন্ত)।</p>
+        <a class="btn full" style="text-align:center" href="report.html?org=${encodeURIComponent(cur)}#opening">শুরুর সংখ্যা</a></div>` : ''}
       <div class="card"><a class="btn full" style="text-align:center" href="help.html">সাহায্য ও নির্দেশিকা</a></div>
       <div class="card"><button class="danger full" data-act="logout">লগআউট</button></div>
       <p class="muted" style="text-align:center"><a href="privacy.html">গোপনীয়তা নীতি</a></p>`;

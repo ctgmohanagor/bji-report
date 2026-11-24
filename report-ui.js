@@ -109,7 +109,7 @@ function applyBoot(b) {
   if (!S.year || S.sessions.indexOf(S.year) < 0) S.year = b.defaultSession;
   setHeader();
 }
-function afterBoot() { if (S.me.mustChange) viewPassword(true); else viewHome(); }
+function afterBoot() { if (S.me.mustChange) viewPassword(true); else if (location.hash === '#opening') viewOpening(S.me.orgId); else viewHome(); }
 
 function boot() {
   call('apiBootstrap', S.token).then(function (b) { applyBoot(b); afterBoot(); })
@@ -305,10 +305,87 @@ function showHome(h) {
     });
   };
   fillLastReminder();
+  if (S.view !== 'reports') openingTodo();
   if (window.BJI_PUSH) BJI_PUSH.resync(API.sb);
+}
+/* শুরুর সংখ্যা বাকি থাকলে হোমে একটা কার্ড (দেওয়া হয়ে গেলে বা প্রথম রিপোর্ট একসেপ্ট হলে আর দেখায় না) */
+function openingTodo() {
+  if (!API.apiOpening) return;
+  API.apiOpening(S.me.orgId).then(function (o) {
+    if (o.locked || o.filled || o.hasAccepted || !o.fields.length || $('optodo')) return;
+    var mc = document.querySelector('.mc'); if (!mc) return;
+    var c = document.createElement('section');
+    c.className = 'card'; c.id = 'optodo';
+    c.innerHTML = '<div class="hrow"><h2 style="margin:0">শুরুর সংখ্যা দিন</h2></div><p class="mut" style="margin:6px 0 10px">রিপোর্ট লেখার আগে একবার: জনশক্তি, ইউনিট, মসজিদ ইত্যাদির এখনকার সংখ্যা। এরপর প্রতি মাসে শুধু বৃদ্ধি/ঘাটতি লিখলেই হবে।</p>' +
+      '<button class="btn big" id="opgo">শুরুর সংখ্যা লিখুন</button>';
+    mc.parentNode.insertBefore(c, mc);
+    $('opgo').onclick = function () { viewOpening(S.me.orgId); };
+  }).catch(function () { });
+}
+
+/* ================= শুরুর সংখ্যা ================= */
+function openingScope(f, lvl) {
+  var whole = /rootprev|selfT/.test(f.opt || '');
+  if (f.pattern === 'FX') return '';
+  if (lvl === 'T') return whole ? 'পুরো থানা, ওয়ার্ডসহ' : (f.enter.indexOf('W') >= 0 ? 'শুধু থানার নিজের অংশ' : '');
+  if (lvl === 'W') return whole ? 'পুরো ওয়ার্ড, ইউনিটসহ' : (f.enter.indexOf('U') >= 0 ? 'শুধু ওয়ার্ডের নিজের অংশ' : '');
+  if (lvl === 'M') return 'শুধু থানার বাইরের অংশ';
+  return '';
+}
+function viewOpening(orgId) {
+  chrome('work');
+  call('apiOpening', S.token, orgId).then(function (o) {
+    var edit = o.canEdit, fixedOnly = edit && o.locked;
+    var html = '<div class="card"><h2>শুরুর সংখ্যা: ' + esc(o.orgName) + '</h2>' +
+      '<p class="subtle">অ্যাপে প্রথম মাসিক রিপোর্ট লেখার আগের মাসের শেষে যে সংখ্যা ছিল তা লিখুন। এই সংখ্যাই প্রথম রিপোর্টের "বিগত সংখ্যা" হবে; এরপর প্রতি মাসে শুধু বৃদ্ধি/ঘাটতি লিখলেই হবে।</p>';
+    if (o.locked) html += '<div class="note warn">প্রথম মাসিক রিপোর্ট একসেপ্ট হয়ে গেছে, তাই শুরুর সংখ্যা আটকানো।' +
+      (edit ? ' বদলাতে উপরের স্তরকে "খুলে দিন" বলুন। শুধু মোট জনসংখ্যা বদলানো যায়।' : '') + '</div>';
+    else if (o.hasAccepted) html += '<div class="note warn">খুলে দেওয়া হয়েছে। এখন ঠিক করলে পার্থক্যটুকু পরের মাসের রিপোর্টের "বিগত সংখ্যা" তে যোগ হবে।</div>';
+    if (!edit && !o.canUnlock) html += '<div class="note warn">এটি শুধু দেখার জন্য।</div>';
+    html += '</div>';
+    var sec = null, lastSub = null, body = '';
+    o.fields.forEach(function (f) {
+      if (f.section !== sec) { if (sec !== null) body += '</div>'; sec = f.section; lastSub = null; body += '<div class="card"><h2>' + esc(f.section) + '</h2>'; }
+      var ro = !edit || (fixedOnly && f.pattern !== 'FX'), v = o.data[f.key];
+      var sc = openingScope(f, o.level);
+      if (f.sub && f.sub !== lastSub) body += '<p class="mut" style="margin:12px 0 2px;font-weight:600">' + esc(f.sub) + '</p>';
+      lastSub = f.sub;
+      body += '<div class="row oprow"><label class="nm" for="op_' + f.key + '">' + esc(ctxLabel(f, o.gender)) +
+        (sc ? ' <small class="mut">(' + sc + ')</small>' : '') + '</label>' +
+        '<input id="op_' + f.key + '" data-op="' + f.key + '" inputmode="decimal" style="max-width:110px;text-align:right"' + (ro ? ' readonly' : '') +
+        ' value="' + (typeof v === 'number' ? bn(v) : '') + '" placeholder="০"></div>';
+    });
+    if (sec !== null) body += '</div>';
+    html += (o.fields.length ? body : '<div class="card"><p>এই স্তরে শুরুর সংখ্যার কোনো ঘর নেই।</p></div>') +
+      '<div class="bar"><button class="btn sec" id="bk">← Back</button>' +
+      (o.canUnlock ? '<button class="btn" id="unl">খুলে দিন</button>' : '') +
+      (edit && o.fields.length ? '<button class="btn" id="osv">সংরক্ষণ</button>' : '') + '</div>';
+    $('app').innerHTML = html;
+    window.scrollTo(0, 0);
+    $('bk').onclick = function () { if (location.hash === '#opening') history.replaceState(null, '', '#home'); viewHome(); };
+    if ($('osv')) $('osv').onclick = function () {
+      var d = {}, bad = '';
+      [].forEach.call(document.querySelectorAll('input[data-op]'), function (i) {
+        var t = en(i.value).trim().replace(/,/g, '');
+        if (t === '') return;
+        var n = Number(t);
+        if (!isFinite(n) || n < 0) { bad = bad || i.id; return; }
+        d[i.getAttribute('data-op')] = n;
+      });
+      if (bad) { toast('সংখ্যা ঠিক নয়', true); $(bad).focus(); return; }
+      call('apiSaveOpening', S.token, o.orgId, d).then(function () { toast('শুরুর সংখ্যা সংরক্ষিত হয়েছে'); viewOpening(o.orgId); }).catch(fail);
+    };
+    if ($('unl')) $('unl').onclick = function () {
+      modal({ title: 'শুরুর সংখ্যা খুলে দেবেন?', text: o.orgName + ' আবার শুরুর সংখ্যা ঠিক করতে পারবে। পরের রিপোর্ট একসেপ্ট হলে আবার আটকে যাবে।', ok: 'খুলে দিন' }).then(function (ok) {
+        if (!ok) return;
+        call('apiUnlockOpening', S.token, o.orgId).then(function () { toast('খুলে দেওয়া হয়েছে'); viewOpening(o.orgId); }).catch(fail);
+      });
+    };
+  }).catch(fail);
 }
 window.addEventListener('hashchange', function () {
   if (!S.me) return;
+  if (location.hash === '#opening') { viewOpening(S.me.orgId); return; }
   S.view = location.hash === '#reports' ? 'reports' : 'home';
   viewHome();
 });
@@ -538,6 +615,7 @@ function viewForm(orgId) {
     else html += '<div class="card">' + sectionsHtml(rep.fields, rep) + '</div>';   // দেখা/রিভিউ: সব একসাথে, ট্যাব নেই
     html += '<div class="bar"><button class="btn sec" id="bk">← Back</button>';
     if (rep.canPdf) html += '<button class="btn sec" id="pdf">PDF</button>';
+    if (rep.orgId !== S.me.orgId) html += '<button class="btn sec" id="opn">শুরুর সংখ্যা</button>';
     if (rep.editable) html += '<button class="btn sec" id="sv">সংরক্ষণ</button><button class="btn" id="nx">পরবর্তী</button><button class="btn" id="sb">' + 'জমা দিন' + '</button>';
     if (rep.canReview) html += '<button class="btn bad" id="rt">ফেরত পাঠান</button><button class="btn" id="ac">একসেপ্ট করুন</button>';
     html += '</div>';
@@ -545,6 +623,7 @@ function viewForm(orgId) {
     window.scrollTo(0, 0);
     $('bk').onclick = viewHome;
     if ($('pdf')) $('pdf').onclick = function () { downloadPdf(rep.orgId); };
+    if ($('opn')) $('opn').onclick = function () { viewOpening(rep.orgId); };
     if (rep.editable) {
       bindTabs(); setHH(); syncBar();
       $('nx').onclick = function () { var j = nextTab(S.tab); if (j >= 0) setTab(j); };

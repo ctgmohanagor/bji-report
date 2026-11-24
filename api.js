@@ -62,18 +62,38 @@
     return rows.length ? norm(rows[0]) : null;
   }
 
-  /* আগের একসেপ্টেড মাসের "বর্তমান"; না থাকলে ০ (পুরনো lookupPrev_ এর মতো; ফিক্সড শুরুর মান পরে যোগ হবে) */
+  /* ---- শুরুর সংখ্যা (0013) ---- */
+  var OPEN = {};
+  async function getOpening(orgId, fresh) {
+    if (!fresh && OPEN[orgId]) return OPEN[orgId];
+    var r = await sb.from('opening_numbers').select('data,base,locked,unlocked_by').eq('org_id', orgId).limit(1);
+    var row = r.error ? null : (r.data[0] || null);     // 0013 না চালানো থাকলে চুপচাপ (সব ০)
+    OPEN[orgId] = { data: (row && row.data) || {}, base: row ? row.base : null, locked: !!(row && row.locked),
+                    unlocked: !!(row && row.unlocked_by), exists: !!row };
+    return OPEN[orgId];
+  }
+  function openingFields(fields) {   // শুরুর সংখ্যার পাতায় যে ঘরগুলো: স্থায়ী (carry), বছর-ভিত্তিক ছাড়া
+    return fields.filter(function (f) { var p = PATTERNS[f.pattern]; return p && p.carry && !p.ytd && !isAuto_(f); });
+  }
+
+  /* "বিগত": আগের একসেপ্টেড মাসের "বর্তমান"; না থাকলে শুরুর সংখ্যা।
+     শুরুর সংখ্যা পরে ঠিক করা হলে (খুলে দিয়ে) পার্থক্যটুকু (data − base) যোগ হয়; জনসংখ্যা (FX) সবসময় শুরুর সংখ্যা থেকে। */
   async function lookupPrev(orgId, month, fields) {
     var rows = check(await sb.from('reports').select('period,extra').eq('org_id', orgId).eq('status', 'accepted')
       .lt('period', per(month)).order('period', { ascending: false }).limit(1));
     var frozen = rows.length ? ((rows[0].extra || {}).cur || {}) : {};
     var lastYear = rows.length ? String(rows[0].period).substr(0, 4) : '';
+    var op = await getOpening(orgId), od = op.data || {}, ob = op.base || null;
     var prev = {};
     fields.forEach(function (f) {
       if (!PATTERNS[f.pattern].carry) return;
-      var useFrozen = f.pattern !== 'FX' && frozen[f.key] !== undefined;
+      var o = typeof od[f.key] === 'number' ? od[f.key] : 0;
+      if (f.pattern === 'FX') { prev[f.key] = o; return; }
+      var useFrozen = frozen[f.key] !== undefined;
       if (useFrozen && PATTERNS[f.pattern].ytd && lastYear !== String(month).substr(0, 4)) { prev[f.key] = 0; return; }
-      prev[f.key] = useFrozen ? frozen[f.key] : 0;
+      if (!useFrozen) { prev[f.key] = PATTERNS[f.pattern].ytd ? 0 : o; return; }
+      var adj = (ob && !PATTERNS[f.pattern].ytd) ? o - (typeof ob[f.key] === 'number' ? ob[f.key] : 0) : 0;
+      prev[f.key] = frozen[f.key] + adj;
     });
     return prev;
   }
@@ -478,6 +498,36 @@
         values: r.values, texts: {}, excluded: [], coverage: r.coverage
       });
       return { html: html, filename: 'report_' + org.code + '_' + year + '_' + kind + (kind === 'Y' ? '' : idx) };
+    },
+
+    /* শুরুর সংখ্যা: দেখা/লেখা (নিজের সংগঠন) ও খুলে দেওয়া (উপরের স্তর) */
+    apiOpening: async function (orgId) {
+      var org = A.byId[orgId || A.me.id];
+      if (!org) throw new Error('এই সংগঠনটি পাওয়া যায়নি।');
+      var fields = openingFields(fieldsForLevel(allFields(currentMonth()), org.level, org.gender));
+      var op = await getOpening(org.id, true);
+      var acc = check(await sb.from('reports').select('id').eq('org_id', org.id).eq('status', 'accepted').limit(1)).length > 0;
+      var locked = op.locked || (acc && !op.unlocked);
+      var mine = org.id === A.me.id;
+      var upper = !mine && String(org.path).indexOf(A.me.path + '.') === 0;
+      return { orgId: org.id, orgName: orgLabel(org), level: org.level, gender: org.gender, fields: renumberSubs_(fields),
+               data: op.data, locked: locked, hasAccepted: acc, filled: Object.keys(op.data || {}).some(function (k) { return k !== 'f004'; }),
+               canEdit: mine, canUnlock: upper && locked };
+    },
+    apiSaveOpening: async function (orgId, data) {
+      var clean = {};
+      Object.keys(data || {}).forEach(function (k) {
+        var v = Number(data[k]);
+        if (/^f\d{3}[a-z]?$/.test(k) && isFinite(v) && v >= 0) clean[k] = Math.round(v * 100) / 100;
+      });
+      check(await sb.rpc('save_opening', { p_org: orgId, p_data: clean }));
+      delete OPEN[orgId];
+      return { saved: true };
+    },
+    apiUnlockOpening: async function (orgId) {
+      check(await sb.rpc('unlock_opening', { p_org: orgId }));
+      delete OPEN[orgId];
+      return { ok: true };
     },
 
     /* রিমাইন্ডার: জমা না দেওয়া অধীনস্থদের ফোনে (0010 send_reminder + Edge Function send-push) */
