@@ -220,7 +220,12 @@ function heroHtml(h) {
   return html + '</section>';
 }
 function monthCardHtml(h) {
-  var lvl = S.me.level, html = '<section class="card mc"><div class="hrow"><span class="mlab">' + esc(h.monthLabel) + ' এর রিপোর্ট</span>' + chip(h.status) + '</div>';
+  var lvl = S.me.level;
+  // মহানগর মাসিক রিপোর্ট লেখে না (ষান্মাসিক/বার্ষিক আলাদা, তৈরি হচ্ছে); এ মাসে শুধু থানাগুলোর সমন্বিত রিপোর্ট
+  if (lvl === 'M') return '<section class="card mc"><div class="hrow"><span class="mlab">' + esc(h.monthLabel) + ': থানাগুলোর রিপোর্ট</span></div>' +
+    '<div class="mbtns"><button class="btn" id="tot">সমন্বিত রিপোর্ট</button></div>' +
+    '<small class="mut" style="display:block;margin-top:8px">মহানগরের ষান্মাসিক ও বার্ষিক রিপোর্ট শীঘ্রই এখানে আসবে।</small></section>';
+  var html = '<section class="card mc"><div class="hrow"><span class="mlab">' + esc(h.monthLabel) + ' এর রিপোর্ট</span>' + chip(h.status) + '</div>';
   if (h.status === 'RETURNED' && h.comment) html += '<div class="note bad"><b>ফেরত পাঠানোর কারণ:</b> ' + esc(h.comment) + '</div>';
   if (h.pending.length && h.canEdit) html += '<div class="note warn"><b>রিভিউ বাকি:</b> এদের রিপোর্ট একসেপ্ট বা ফেরত না দেওয়া পর্যন্ত ' + esc(h.submitLabel) + ' যাবে না — ' + esc(h.pending.join(', ')) + '</div>';
   else if (h.notIncluded.length && h.canEdit && h.status !== 'NONE') html += '<div class="note warn">এদের রিপোর্ট একসেপ্ট হয়নি, তাই এদের তথ্য আপনার মোটে ঢুকবে না: ' + esc(h.notIncluded.join(', ')) + '</div>';
@@ -294,7 +299,7 @@ function showHome(h) {
     : heroHtml(h) + monthCardHtml(h) + kidsHtml(h) + remindHtml(h);
   window.scrollTo(0, 0);
   bindReportsTop();
-  $('open').onclick = function () { viewForm(S.me.orgId); };
+  if ($('open')) $('open').onclick = function () { viewForm(S.me.orgId); };
   if ($('pdf')) $('pdf').onclick = function () { downloadPdf(S.me.orgId); };
   if ($('tot')) $('tot').onclick = function () { viewTotals(S.me.orgId); };
   [].forEach.call(document.querySelectorAll('[data-k]'), function (b) { b.onclick = function () { viewForm(b.getAttribute('data-k')); }; });
