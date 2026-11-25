@@ -156,7 +156,9 @@ function monthOptions() {
 
 /* ত্রৈমাসিক / ষান্মাসিক / বাৎসরিক রিপোর্ট বাছাইয়ের ঘর (সেশন অনুযায়ী; মাস বাছা লাগে না) */
 function periodCard() {
-  return '<div class="card"><h2>সময়ভিত্তিক সমন্বিত রিপোর্ট</h2><small class="mut">সেশন ' + bn(S.year) + ' · একসেপ্টেড মাসিক রিপোর্টের যোগফল</small>' +
+  var metro = S.me.level === 'M';
+  return '<div class="card"><h2>' + (metro ? 'মহানগরের ষান্মাসিক / বার্ষিক রিপোর্ট' : 'সময়ভিত্তিক সমন্বিত রিপোর্ট') + '</h2><small class="mut">সেশন ' + bn(S.year) + ' · ' +
+    (metro ? 'ষান্মাসিক ও বার্ষিক রিপোর্ট লিখুন (নিজস্ব + থানাগুলোর যোগফল); ত্রৈমাসিক শুধু থানাগুলোর যোগফল' : 'একসেপ্টেড মাসিক রিপোর্টের যোগফল') + '</small>' +
     '<div class="two"><div><label>ধরন</label><select id="pk"><option value="">নির্বাচন করুন</option>' +
     ['Q', 'H', 'Y'].map(function (k) { return '<option value="' + k + '"' + (S.pk === k ? ' selected' : '') + '>' + esc(S.periods[k].name) + '</option>'; }).join('') +
     '</select></div><div id="pibox"><label>সময়কাল</label><select id="pi"></select></div></div>' +
@@ -178,6 +180,7 @@ function bindPeriod() {
   $('pgo').onclick = function () {
     if (!S.pk) return toast('ধরন নির্বাচন করুন', true);
     if (S.pk !== 'Y' && !S.pi) return toast('সময়কাল নির্বাচন করুন', true);
+    if (S.me.level === 'M' && (S.pk === 'H' || S.pk === 'Y')) { S.mview = 'own'; viewMetroRep(S.pk === 'Y' ? 'Y' : 'H' + S.pi, S.year); return; }
     viewPeriod(S.me.orgId);
   };
 }
@@ -224,7 +227,7 @@ function monthCardHtml(h) {
   // মহানগর মাসিক রিপোর্ট লেখে না (ষান্মাসিক/বার্ষিক আলাদা, তৈরি হচ্ছে); এ মাসে শুধু থানাগুলোর সমন্বিত রিপোর্ট
   if (lvl === 'M') return '<section class="card mc"><div class="hrow"><span class="mlab">' + esc(h.monthLabel) + ': থানাগুলোর রিপোর্ট</span></div>' +
     '<div class="mbtns"><button class="btn" id="tot">সমন্বিত রিপোর্ট</button></div>' +
-    '<small class="mut" style="display:block;margin-top:8px">মহানগরের ষান্মাসিক ও বার্ষিক রিপোর্ট শীঘ্রই এখানে আসবে।</small></section>';
+    '<small class="mut" style="display:block;margin-top:8px">মহানগরের ষান্মাসিক ও বার্ষিক রিপোর্ট: নিচের "রিপোর্ট" ট্যাব থেকে।</small></section>';
   var html = '<section class="card mc"><div class="hrow"><span class="mlab">' + esc(h.monthLabel) + ' এর রিপোর্ট</span>' + chip(h.status) + '</div>';
   if (h.status === 'RETURNED' && h.comment) html += '<div class="note bad"><b>ফেরত পাঠানোর কারণ:</b> ' + esc(h.comment) + '</div>';
   if (h.pending.length && h.canEdit) html += '<div class="note warn"><b>রিভিউ বাকি:</b> এদের রিপোর্ট একসেপ্ট বা ফেরত না দেওয়া পর্যন্ত ' + esc(h.submitLabel) + ' যাবে না — ' + esc(h.pending.join(', ')) + '</div>';
@@ -660,6 +663,75 @@ function viewForm(orgId) {
         modal({ title: 'ফেরত পাঠান', text: 'কী সংশোধন করতে হবে লিখুন।', input: true, ok: 'ফেরত পাঠান', bad: true }).then(function (c) {
           if (c === null) return;
           call('apiReview', S.token, S.month, rep.orgId, 'return', c).then(function (r) { toast('ফেরত পাঠানো হয়েছে'); showHome(r.home); }).catch(fail);
+        });
+      };
+    }
+  }).catch(fail);
+}
+
+/* ================= মহানগরের ষান্মাসিক/বার্ষিক রিপোর্ট ================= */
+function metroChip(st) {
+  var t = { NONE: ['শুরু হয়নি', ''], draft: ['খসড়া', 'SUBMITTED'], final: ['চূড়ান্ত', 'ACCEPTED'] }[st] || [st, ''];
+  return '<span class="chip ' + t[1] + '">' + t[0] + '</span>';
+}
+function metroSectionsHtml(fields, rep, openFirst) {
+  var groups = [], by = {};
+  fields.forEach(function (f) { if (!by[f.section]) { by[f.section] = []; groups.push(f.section); } by[f.section].push(f); });
+  return groups.map(function (g, i) {
+    return '<details class="card msec"' + (openFirst && i === 0 ? ' open' : '') + '><summary><b>' + esc(g) + '</b></summary>' +
+      sectionsHtml(by[g], rep, g) + '</details>';
+  }).join('');
+}
+function viewMetroRep(kind, year) {
+  chrome('work');
+  call('apiMetroRep', S.token, kind, year).then(function (r) {
+    var view = S.mview === 'com' ? 'com' : 'own', ed = r.editable && view === 'own';
+    S.cur = { fields: r.fields, prev: r.prev, editable: ed };
+    var gapN = 0; r.coverage.forEach(function (c) { gapN += c.missing.length; });
+    var html = '<div class="card"><div class="hrow"><h2 style="margin:0">মহানগরী সংগঠনের ' + esc(r.label) + '</h2>' + metroChip(r.status) + '</div>' +
+      '<small class="mut">' + esc(r.orgName) + ' · থানাগুলোর ' + bn(r.nodeCount) + 'টি মাসিক রিপোর্ট যোগ হয়েছে (জমা ও একসেপ্টেড)</small>';
+    if (!r.started) html += '<div class="note warn">এই সময়কাল এখনো শুরু হয়নি; থানার কোনো রিপোর্ট যোগ হবে না।</div>';
+    else if (r.partial) html += '<div class="note warn">এই সময়কাল এখনো শেষ হয়নি। এখন পর্যন্ত জমা হওয়া থানার রিপোর্ট যোগ হচ্ছে।</div>';
+    if (r.status === 'final') html += '<div class="note">চূড়ান্ত করা হয়েছে। চূড়ান্ত করার সময়ের সমন্বিত সংখ্যা দেখানো হচ্ছে। বদলাতে "আবার খুলুন" চাপুন।</div>';
+    if (gapN) html += '<details class="note warn"><summary>যে থানার মাসিক রিপোর্ট জমা হয়নি (' + bn(gapN) + ')</summary>' +
+      r.coverage.map(function (c) { return '<p style="margin:6px 0 0"><b>' + esc(c.label) + ':</b> ' + esc(c.missing.join(', ')) + '</p>'; }).join('') + '</details>';
+    html += '<div class="mbtns mtog" role="tablist"><button class="btn' + (view === 'own' ? '' : ' sec') + '" id="mvOwn" role="tab" aria-selected="' + (view === 'own') + '">মহানগরের নিজস্ব</button>' +
+      '<button class="btn' + (view === 'com' ? '' : ' sec') + '" id="mvCom" role="tab" aria-selected="' + (view === 'com') + '">সমন্বিত (নিজস্ব + থানা)</button></div>' +
+      '<small class="mut" style="display:block;margin-top:6px">' + (view === 'own'
+        ? 'এখানে শুধু মহানগরের নিজের কাজের সংখ্যা লিখুন। জনশক্তি/ইউনিট ধরনের ঘরে শুধু থানার বাইরের অংশ।'
+        : 'প্রতিটি ঘর = মহানগরের নিজস্ব + থানাগুলোর যোগফল। PDF এই সংখ্যা দিয়ে হয়।') + '</small></div>';
+    var rep = view === 'own' ? { editable: ed, data: r.data, derived: r.own, gender: 'B' } : { editable: false, data: {}, derived: r.combined, gender: 'B' };
+    html += metroSectionsHtml(r.fields, rep, true);
+    html += '<div class="bar"><button class="btn sec" id="bk">← Back</button><button class="btn sec" id="mpdf">PDF</button>';
+    if (r.status === 'final') html += '<button class="btn sec" id="mro">আবার খুলুন</button>';
+    else if (ed) html += '<button class="btn sec" id="sv">সংরক্ষণ</button><button class="btn" id="mfin">চূড়ান্ত করুন</button>';
+    html += '</div>';
+    $('app').innerHTML = html;
+    window.scrollTo(0, 0);
+    $('bk').onclick = function () { S.view = 'reports'; viewHome(); };
+    $('mvOwn').onclick = function () { if (view !== 'own') { S.mview = 'own'; viewMetroRep(kind, year); } };
+    $('mvCom').onclick = function () {
+      if (view === 'com') return;
+      var go = function () { S.mview = 'com'; viewMetroRep(kind, year); };
+      if (ed) call('apiSaveMetroRep', S.token, kind, year, collect()).then(go).catch(fail); else go();
+    };
+    $('mpdf').onclick = function () {
+      var go = function () { showPdf(call('apiMetroRepPdf', S.token, kind, year)); };
+      if (ed) call('apiSaveMetroRep', S.token, kind, year, collect()).then(go).catch(fail); else go();
+    };
+    if ($('mro')) $('mro').onclick = function () {
+      modal({ title: 'আবার খুলবেন?', text: 'রিপোর্টটি আবার খসড়া হবে; থানার নতুন রিপোর্ট থাকলে সমন্বিত সংখ্যা বদলাতে পারে।', ok: 'আবার খুলুন' }).then(function (ok) {
+        if (!ok) return;
+        call('apiReopenMetroRep', S.token, kind, year).then(function () { toast('আবার খোলা হয়েছে'); viewMetroRep(kind, year); }).catch(fail);
+      });
+    };
+    if (ed) {
+      [].forEach.call(document.querySelectorAll('input[data-f]'), function (i) { i.oninput = function () { recalc(i.getAttribute('data-f')); }; });
+      $('sv').onclick = function () { call('apiSaveMetroRep', S.token, kind, year, collect()).then(function () { toast('সংরক্ষিত হয়েছে'); }).catch(fail); };
+      $('mfin').onclick = function () {
+        modal({ title: 'চূড়ান্ত করবেন?', text: 'এখনকার সমন্বিত সংখ্যা (নিজস্ব + থানা) রিপোর্টে স্থায়ী হবে। পরে থানার রিপোর্ট বদলালেও এটা বদলাবে না, যদি না "আবার খুলুন" চাপেন।', ok: 'চূড়ান্ত করুন' }).then(function (ok) {
+          if (!ok) return;
+          call('apiFinalizeMetroRep', S.token, kind, year, collect()).then(function () { toast('চূড়ান্ত করা হয়েছে'); viewMetroRep(kind, year); }).catch(fail);
         });
       };
     }

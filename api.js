@@ -62,6 +62,84 @@
     return rows.length ? norm(rows[0]) : null;
   }
 
+  /* ---- মহানগরের ষান্মাসিক/বার্ষিক রিপোর্টের ভেতরের কাজ ---- */
+  function metroMonths(kind, year) { return kind === 'Y' ? periodMonths(year, 'Y', 1) : periodMonths(year, 'H', kind === 'H1' ? 1 : 2); }
+  function metroLabel(kind, year) {
+    return (kind === 'Y' ? 'বার্ষিক' : 'ষান্মাসিক') + ' রিপোর্ট: ' +
+      (kind === 'H1' ? 'জানুয়ারি – জুন ' : kind === 'H2' ? 'জুলাই – ডিসেম্বর ' : 'জানুয়ারি – ডিসেম্বর ') + bn(year);
+  }
+  function metroFormFields(month) {
+    var base = {}, extra = {};
+    allFields(month).forEach(function (f) { base[f.key] = f; });
+    (METRO_FORM.extra || []).forEach(function (f) { extra[f.key] = f; });
+    var out = [];
+    METRO_FORM.sections.forEach(function (s) {
+      s.keys.forEach(function (k) {
+        var f = base[k] || extra[k]; if (!f) return;
+        var c = {}; Object.keys(f).forEach(function (x) { c[x] = f[x]; });
+        c.section = s.title; c.tab = -1; c.ro = false;
+        if (c.enter.indexOf('X') < 0) c.enter = c.enter + 'X';
+        c.opt = String(f.opt || '').split(',').filter(function (o) { return o && !/^\s*(into|autoinc|cfs):/.test(o); }).join(',');
+        out.push(c);
+      });
+    });
+    return out;
+  }
+  async function metroRows(year) {
+    return check(await sb.from('metro_reports').select('id,kind,year,data,extra,status,version,finalized_at')
+      .eq('org_id', A.me.id).in('year', [+year, +year - 1]));
+  }
+  /* মহানগরের নিজস্ব "বিগত": ষান্মাসিক-১ ও বার্ষিক = আগের বছরের বার্ষিকের "বর্তমান" (না থাকলে শুরুর সংখ্যা);
+     ষান্মাসিক-২ = একই বছরের ষান্মাসিক-১ এর "বর্তমান"। */
+  async function metroPrev(kind, year, fields, rows) {
+    var op = await getOpening(A.me.id), od = op.data || {}, base = {};
+    fields.forEach(function (f) { if (PATTERNS[f.pattern].carry) base[f.key] = typeof od[f.key] === 'number' ? od[f.key] : 0; });
+    var find = function (k, y) { return rows.filter(function (r) { return r.kind === k && +r.year === +y; })[0]; };
+    var curOf = function (row, prev) {
+      if (row.status === 'final' && row.extra && row.extra.ownCur) return row.extra.ownCur;
+      return carryOf(fields, row.data || {}, prev).cur;
+    };
+    var py = find('Y', +year - 1), start = py ? curOf(py, base) : base;
+    var prev = {};
+    fields.forEach(function (f) {
+      if (!PATTERNS[f.pattern].carry) return;
+      prev[f.key] = f.pattern === 'FX' ? base[f.key] : (typeof start[f.key] === 'number' ? start[f.key] : base[f.key]);
+    });
+    if (kind !== 'H2') return prev;
+    var h1 = find('H1', year);
+    if (!h1) return prev;
+    var c1 = curOf(h1, prev), p2 = {};
+    Object.keys(prev).forEach(function (k) { p2[k] = typeof c1[k] === 'number' && fields.some(function (f) { return f.key === k && f.pattern !== 'FX'; }) ? c1[k] : prev[k]; });
+    return p2;
+  }
+  async function metroCtx(kind, year, light) {
+    if (A.me.level !== 'M') throw new Error('এটি শুধু মহানগরের জন্য।');
+    if (['H1', 'H2', 'Y'].indexOf(kind) < 0) throw new Error('রিপোর্টের ধরন ঠিক নয়।');
+    var ms = metroMonths(kind, year), cur = currentMonth();
+    var fields = metroFormFields(ms[ms.length - 1]);
+    var rows = await metroRows(year), row = rows.filter(function (r) { return r.kind === kind && +r.year === +year; })[0] || null;
+    var data = row ? (row.data || {}) : {};
+    if (light) return { fields: fields, row: row, data: data };
+    var prev = await metroPrev(kind, year, fields, rows);
+    var own = aggregate(fields, [{ orgId: A.me.id, level: 'X', gender: 'B', root: true, data: data, prev: prev }]);
+    if (row && row.status === 'final' && row.extra && row.extra.totals) {
+      return { fields: renumberSubs_(fields), row: row, data: data, prev: prev, own: row.extra.own || own, combined: row.extra.totals,
+               coverage: row.extra.coverage || [], nodeCount: row.extra.nodeCount || 0, partial: false, started: true };
+    }
+    var items = [], coverage = [];
+    for (var j = 0; j < ms.length; j++) {
+      if (ms[j] > cur) continue;
+      var mi = metroItems(ms[j], await monthReports(ms[j]), A.me);
+      items = items.concat(mi.items);
+      if (mi.missing.length) coverage.push({ month: ms[j], label: monthLabel(ms[j]), included: mi.items.length, missing: mi.missing });
+    }
+    var ownItem = { org: { id: '__metro_own' }, month: ms[ms.length - 1], status: 'own', totals: own };
+    var combined = metroValues(fields, items.concat([ownItem]), true);
+    (METRO_FORM.ownOnly || []).forEach(function (k) { if (own[k]) combined[k] = own[k]; else delete combined[k]; });
+    return { fields: renumberSubs_(fields), row: row, data: data, prev: prev, own: own, combined: combined, coverage: coverage,
+             nodeCount: items.length, partial: ms[ms.length - 1] > cur, started: ms[0] <= cur };
+  }
+
   /* ---- শুরুর সংখ্যা (0013) ---- */
   var OPEN = {};
   async function getOpening(orgId, fresh) {
@@ -530,6 +608,49 @@
       check(await sb.rpc('unlock_opening', { p_org: orgId }));
       delete OPEN[orgId];
       return { ok: true };
+    },
+
+    /* ================= মহানগরের ষান্মাসিক/বার্ষিক রিপোর্ট (0014) =================
+       নিজস্ব (মহানগর লেখে) + থানাগুলোর জমা দেওয়া মাসিক রিপোর্টের যোগফল = সমন্বিত। চূড়ান্ত করলে সমন্বিত মোট জমা থাকে। */
+    apiMetroRep: async function (kind, year) {
+      var c = await metroCtx(kind, year);
+      return { kind: kind, year: year, label: metroLabel(kind, year), kindName: kind === 'Y' ? 'বার্ষিক' : 'ষান্মাসিক',
+               orgName: orgLabel(A.me), status: c.row ? c.row.status : 'NONE', version: c.row ? c.row.version : null,
+               editable: !c.row || c.row.status !== 'final', partial: c.partial, started: c.started,
+               fields: c.fields, data: c.data, prev: c.prev, own: c.own, combined: c.combined, coverage: c.coverage,
+               nodeCount: c.nodeCount, ownOnly: METRO_FORM.ownOnly, finalizedAt: c.row ? c.row.finalized_at : null };
+    },
+    apiSaveMetroRep: async function (kind, year, input, version) {
+      var c = await metroCtx(kind, year, true);
+      if (c.row && c.row.status === 'final') throw new Error('রিপোর্টটি চূড়ান্ত করা আছে। বদলাতে আগে "আবার খুলুন" চাপুন।');
+      var clean = mergeKeepOmitted(c.data, validateData(c.fields, 'X', 'B', input), c.fields);
+      var row = check(await sb.rpc('save_metro_report', { p_org: A.me.id, p_kind: kind, p_year: +year, p_data: clean,
+                                                          p_version: c.row ? c.row.version : null }));
+      return { saved: true, version: row.version };
+    },
+    apiFinalizeMetroRep: async function (kind, year, input) {
+      if (input) await API.apiSaveMetroRep(kind, year, input);
+      var c = await metroCtx(kind, year);
+      if (!c.row) throw new Error('আগে রিপোর্টটি সংরক্ষণ করুন।');
+      var carry = carryOf(c.fields, c.data, c.prev);
+      var extra = { totals: c.combined, own: c.own, ownPrev: carry.prev, ownCur: carry.cur, coverage: c.coverage, nodeCount: c.nodeCount };
+      check(await sb.rpc('finalize_metro_report', { p_org: A.me.id, p_kind: kind, p_year: +year, p_extra: extra, p_version: c.row.version }));
+      return { ok: true };
+    },
+    apiReopenMetroRep: async function (kind, year) {
+      check(await sb.rpc('reopen_metro_report', { p_org: A.me.id, p_kind: kind, p_year: +year }));
+      return { ok: true };
+    },
+    apiMetroRepPdf: async function (kind, year) {
+      var r = await API.apiMetroRep(kind, year), ms = metroMonths(kind, year);
+      var m1 = parseInt(ms[0].split('-')[1], 10), m2 = parseInt(ms[ms.length - 1].split('-')[1], 10);
+      setPdfShowZero_('0');
+      var html = buildPaperHtml({
+        title: 'মহানগরী সংগঠনের ' + r.kindName + ' রিপোর্ট', orgLabel: 'মহানগরী', orgName: A.me.name, district: A.me.name, kind: r.kindName,
+        monthName: MONTHS_BN[m1 - 1] + ' – ' + MONTHS_BN[m2 - 1], year: bn(year), values: r.combined, coverage: r.coverage,
+        fontSize: 9.5, pageBreaks: true, leader: await API._leader(A.me), leaderLabel: 'আমীর', font: { kind: 'sans', web: true }, sign: true
+      });
+      return { html: html, filename: 'report_metro_' + year + '_' + kind };
     },
 
     /* রিমাইন্ডার: জমা না দেওয়া অধীনস্থদের ফোনে (0010 send_reminder + Edge Function send-push) */
