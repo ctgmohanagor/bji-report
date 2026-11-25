@@ -650,8 +650,8 @@
       var html = buildPaperHtml({
         metro: true, blocks: metroBlocks_(), texts: texts,
         title: 'মহানগরী সংগঠনের', orgLabel: 'মহানগরী', orgName: A.me.name, district: A.me.name, kind: r.kindName,
-        monthName: kind === 'Y' ? '' : MONTHS_BN[m1 - 1] + ' – ' + MONTHS_BN[m2 - 1], year: bn(year), values: vals, coverage: r.coverage,
-        fontSize: 9.5, pageBreaks: true, leader: await API._leader(A.me), leaderLabel: 'আমীর, ' + A.me.name, font: { kind: 'sans', web: true }, sign: true
+        monthName: kind === 'Y' ? '' : MONTHS_BN[m1 - 1] + ' – ' + MONTHS_BN[m2 - 1], year: bn(year), values: vals, coverage: [],   // বাদ পড়া থানার তালিকা PDF-এ নয়, শুধু অ্যাপের পর্দায়
+        fontSize: 11, pageBreaks: true, leader: await API._leader(A.me), leaderLabel: 'আমীর, ' + A.me.name, font: { kind: 'sans', web: true }, sign: true
       });
       return { html: html, filename: 'report_metro_' + year + '_' + kind };
     },
