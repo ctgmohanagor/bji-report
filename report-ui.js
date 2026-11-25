@@ -227,8 +227,7 @@ function kidCounts(h) {
   return c;
 }
 function heroHtml(h) {
-  var me = S.me, html = '<section class="hero"><div class="hbar"><div class="logo" aria-hidden="true">' +
-    '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg></div>' +
+  var me = S.me, html = '<section class="hero"><div class="hbar"><div class="logo" aria-hidden="true"><img src="icons/logo-160.png" alt=""></div>' +
     '<div class="htx"><b>মাসিক রিপোর্ট</b><span>' + esc(h.monthLabel) + '</span></div></div>' +
     '<p class="hi">আসসালামু আলাইকুম</p><h1 class="hname">' + esc(orgTitle()) + '</h1>' +
     '<p class="hrole">' + esc(roleLabel()) + (me.userName ? ' - ' + esc(me.userName) : '') + '</p>';
