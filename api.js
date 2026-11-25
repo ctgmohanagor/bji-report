@@ -645,10 +645,13 @@
       var r = await API.apiMetroRep(kind, year), ms = metroMonths(kind, year);
       var m1 = parseInt(ms[0].split('-')[1], 10), m2 = parseInt(ms[ms.length - 1].split('-')[1], 10);
       setPdfShowZero_('0');
+      var vals = Object.assign({}, r.combined, { __own: r.own }), texts = {};
+      Object.keys(r.data || {}).forEach(function (k) { if (r.data[k] && r.data[k].txt) texts[k] = r.data[k].txt; });
       var html = buildPaperHtml({
-        title: 'মহানগরী সংগঠনের ' + r.kindName + ' রিপোর্ট', orgLabel: 'মহানগরী', orgName: A.me.name, district: A.me.name, kind: r.kindName,
-        monthName: MONTHS_BN[m1 - 1] + ' – ' + MONTHS_BN[m2 - 1], year: bn(year), values: r.combined, coverage: r.coverage,
-        fontSize: 9.5, pageBreaks: true, leader: await API._leader(A.me), leaderLabel: 'আমীর', font: { kind: 'sans', web: true }, sign: true
+        metro: true, blocks: metroBlocks_(), texts: texts,
+        title: 'মহানগরী সংগঠনের', orgLabel: 'মহানগরী', orgName: A.me.name, district: A.me.name, kind: r.kindName,
+        monthName: kind === 'Y' ? '' : MONTHS_BN[m1 - 1] + ' – ' + MONTHS_BN[m2 - 1], year: bn(year), values: vals, coverage: r.coverage,
+        fontSize: 9.5, pageBreaks: true, leader: await API._leader(A.me), leaderLabel: 'আমীর, ' + A.me.name, font: { kind: 'sans', web: true }, sign: true
       });
       return { html: html, filename: 'report_metro_' + year + '_' + kind };
     },

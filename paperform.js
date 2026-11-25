@@ -410,8 +410,20 @@ var PAPER_NOT_PRINTED = {
 
 /* ---------- রেন্ডার ---------- */
 function pfRef_(ref, vals) {
-  var q = String(ref).split('.'), o = vals[q[0]];
+  ref = String(ref);
+  // মহানগর: 'o:' = শুধু নিজস্ব (vals.__own), 't:' = থানাগুলোর অংশ (সমন্বিত − নিজস্ব)
+  if (ref.indexOf('o:') === 0) return pfRef_(ref.slice(2), vals.__own || {});
+  if (ref.indexOf('t:') === 0) {
+    var all = pfRef_(ref.slice(2), Object.assign({}, vals, { __own: null })), own = pfRef_(ref.slice(2), vals.__own || {});
+    return all === null ? null : round2_(all - (own || 0));
+  }
+  var q = ref.split('.'), o = vals[q[0]];
   if (!o) return null;
+  if (q[1] && q[1].indexOf('+') > 0) {        // 'f158.cm+cf' = কলামের যোগ
+    var t = 0, any = false;
+    q[1].split('+').forEach(function (c) { var x = o[c]; if (typeof x === 'number') { t += x; any = true; } });
+    return any ? t : null;
+  }
   var v = o[q[1]];
   return (v === undefined || v === null) ? null : v;
 }
@@ -478,18 +490,25 @@ function buildPaperHtml(o) {
     '.pb{page-break-before:always}.pg{width:190mm;page-break-after:always;break-after:page}.pg:last-of-type{page-break-after:auto;break-after:auto}' +
     '</style></head><body>';
   h += (pbOn ? '<div class="pg">' : '') + '<p class="c bis">বিসমিল্লাহির রাহমানির রাহীম</p><p class="c title">' + htmlEsc_(o.title || 'থানা সংগঠনের রিপোর্ট') + '</p>';
+  if (o.metro) {     // মহানগরের নমুনা: "মহানগরী সংগঠনের / বার্ষিক রিপোর্ট-২০২৪ / চট্টগ্রাম মহানগরী / আমীর : …"
+    h += '<p class="c kind">' + htmlEsc_(o.kind + ' রিপোর্ট-' + (o.year || '')) + (o.monthName ? ' (' + htmlEsc_(o.monthName) + ')' : '') + '</p>';
+    h += '<p class="c dist">' + htmlEsc_(o.district || '') + '</p>';
+    h += '<table class="plain"><tr><td colspan="2">আমীর : ' + (o.leader ? htmlEsc_(o.leader) : '........................................................') + '</td></tr>';
+  } else {
   h += '<p class="c kind">' + PAPER_KINDS_.map(function (k) { return k === o.kind ? '<u>' + htmlEsc_(k) + '</u>' : htmlEsc_(k); }).join('/') + '</p>';
   h += '<p class="c dist">' + htmlEsc_(o.district || '') + '</p>';
   h += '<table class="plain"><tr><td>মাসের নাম : ' + htmlEsc_(o.monthName || '') + '</td><td class="rt">সন: ' + htmlEsc_(o.year || '') + '</td></tr>' +
     '<tr><td>' + htmlEsc_(o.orgLabel || 'উপজেলা/থানার নাম') + ' : ' + htmlEsc_(o.orgName || '') + '</td><td class="rt">জেলা/মহানগরী: ' + htmlEsc_(o.district || '') + '</td></tr>' +
-    '<tr><td colspan="2">থানা আমীর/সভাপতির নাম : ' + (o.leader ? htmlEsc_(o.leader) : '........................................................') + '</td></tr>' +
-    '<tr><td colspan="2">দাওয়াত ও তাবলীগ :</td></tr>' +
+    '<tr><td colspan="2">থানা আমীর/সভাপতির নাম : ' + (o.leader ? htmlEsc_(o.leader) : '........................................................') + '</td></tr>';
+  }
+  h += '<tr><td colspan="2">দাওয়াত ও তাবলীগ :</td></tr>' +
     '<tr><td>ক) জনসাধারণের মাঝে সর্বমোট দাওয়াত প্রদান সংখ্যা: ' + htmlEsc_(num('f003.v')) + '</td><td class="rt">মোট জনসংখ্যা: ' + htmlEsc_(num('f004.v')) + '</td></tr>' +
     '<tr><td colspan="2">টার্গেট(' + PAPER_KINDS_.join('/') + '): ' + htmlEsc_(num('f005.v')) + ' জন</td></tr></table>';
   h += '<p class="n">* দাওয়াত তাবলীগের \'ক\' এর অধীনে ক্রমিক ১-৪নং পর্যন্ত দাওয়াত প্রদানের মোট সংখ্যা যোগ করে এখানে বসাতে হবে।</p>';
 
-  paperBlocks_().forEach(function (b) {
+  (o.blocks || paperBlocks_()).forEach(function (b) {
     if (b.pb) { if (pbOn) h += '</div><div class="pg">'; return; }
+    if (b.txt) { var tx = (o.texts || {})[b.txt]; h += '<div style="border:1px solid #000;min-height:40px;padding:3px;font-size:' + fs + 'px;white-space:pre-wrap">' + htmlEsc_(tx || '') + '</div>'; return; }
     if (b.h) { h += '<h3' + (b.big ? ' class="big"' : '') + '>' + htmlEsc_(b.h) + '</h3>'; return; }
     if (b.p) { h += '<p class="n' + (b.small ? ' small' : '') + '">' + htmlEsc_(b.p) + '</p>'; return; }
     if (b.table) h += pfTable_(b.table, vals, b.glue);
