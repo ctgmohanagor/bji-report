@@ -314,6 +314,8 @@ function metroBlocks_() {
     [L_('ভোট কেন্দ্র কমিটি'), N_('f266.cur'), N_('f266.inc'), N_('f266.target')],
     [L_('কেন্দ্র/ বুথ ভিত্তিক ইউনিট'), N_('f267.cur'), N_('f267.inc'), N_('f267.target')],
     [L_('জেলা-মহানগরী/ উপজেলা/ থানা/ পৌরসভা/ ইউনিয়ন/ ওয়ার্ডভিত্তিক নির্বাচন পরিচালনা কমিটির বৈঠক সংখ্যা'), N_('f268.cur'), N_('f268.inc'), N_('f268.target')]], { glue: 1 }));
+  // ---------------- পাতা ৮ ---------------- (৭ নম্বর পাতা ভিড় হয় বলে প্রচার-মিডিয়া ও আইন-বিচার এখানে)
+  b.push({ pb: 1 });
   b.push({ h: '৫. প্রচার ও মিডিয়া :' });
   var n4 = function (lab, k) { return [L_(lab), N_(k + '.c1'), N_(k + '.c2'), N_(k + '.c3'), N_(k + '.c4')]; };
   b.push(T(5, [28, 18, 18, 18, 18], [[H_('নির্বাচনের ধরন'), H_('নির্বাচন সংখ্যা'), H_('মোট পদ সংখ্যা'), H_('অংশগ্রহনকৃত পদ সংখ্যা'), H_('নির্বাচিত পদ সংখ্যা')]], [
@@ -328,8 +330,6 @@ function metroBlocks_() {
     [L_('আইন বিষয়ক কমিটি/ সেল গঠন সংখ্যা'), N_('m049.v'), L_('আইনজীবী জনশক্তি সংখ্যা'), N_('m050.v')],
     [L_('আইনি সহায়তা প্রদান সংখ্যা'), N_('m051.v'), L_('নতুন আইনজীবী তৈরী সংখ্যা'), N_('m052.v')]], { glue: 1 }));
 
-  // ---------------- পাতা ৮ ----------------
-  b.push({ pb: 1 });
   b.push({ h: '৭. মানবাধিকার :' });
   b.push(T(4, [34, 16, 34, 16], null, [
     [L_('মানবাধিকার সংগঠন প্রতিষ্ঠার সংখ্যা'), N_('f272.v'), L_('জাতীয় ও আন্তর্জাতিক মানবাধিকার সংস্থার স্থানীয় শাখা চালুকরণ সংখ্যা'), N_('f273.v')],
@@ -354,3 +354,10 @@ function metroBlocks_() {
   b.push({ txt: 'm063' });
   return b;
 }
+
+/* মহানগরের PDF: প্রতিটি পাতা নিজে মেপে A4 এ আঁটে — বড় হলে ছোট, ফাঁকা থাকলে লেখা বড় (সর্বোচ্চ ১.৩ গুণ) */
+var METRO_FIT_JS_ = '<script>/*METRO_GROW*/(function(){var MAX=252*96/25.4,W=190*96/25.4;function fit(){var ps=document.querySelectorAll(".pg");' +
+  'for(var i=0;i<ps.length;i++){var p=ps[i];p.style.zoom="";p.style.width="";var h=p.scrollHeight;var z=Math.min(MAX/h,1.3);' +
+  'if(z<1||z>1.02){z=Math.floor(z*1000)/1000;p.style.width=(W/z)+"px";p.style.zoom=z.toString();h=p.scrollHeight*z;' +
+  'if(h>MAX){z=Math.floor(z*MAX/h*1000)/1000;p.style.width=(W/z)+"px";p.style.zoom=z.toString();}}}}' +
+  'fit();window.addEventListener("load",fit);if(document.fonts&&document.fonts.ready)document.fonts.ready.then(fit);window.addEventListener("beforeprint",fit);})();<\/script>';

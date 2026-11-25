@@ -68,7 +68,24 @@ function showPdf(promise) {
                      .replace(/<body>/, '<body>' + bar);
     if (!w || w.closed) { toast('পপআপ আটকে গেছে। ব্রাউজারে এই সাইটের পপআপ চালু করুন।', true); return; }
     w.document.open(); w.document.write(html); w.document.close();
+    // পাতা মাপে আঁটানো এখান থেকেও চালানো হয় (কোনো কোনো ব্রাউজারে লেখা-স্ক্রিপ্ট নিজে চলে না)
+    var go = function () { try { fitPdfPages(w.document, /METRO_GROW/.test(html) ? 1.3 : 1); } catch (e) { } };
+    setTimeout(go, 200); setTimeout(go, 1200);
+    try { if (w.document.fonts && w.document.fonts.ready) w.document.fonts.ready.then(go); w.addEventListener('beforeprint', go); } catch (e) { }
   }).catch(function (e) { if (w && !w.closed) w.close(); fail(e); });
+}
+/* প্রতিটি ছাপা-পাতা (.pg) A4 এর ২৫২ mm উচ্চতায় আঁটে: বড় হলে ছোট, grow > 1 হলে ফাঁকা পাতায় লেখা বড় */
+function fitPdfPages(doc, grow) {
+  var MAX = 252 * 96 / 25.4, W = 190 * 96 / 25.4, ps = doc.querySelectorAll('.pg');
+  for (var i = 0; i < ps.length; i++) {
+    var p = ps[i]; p.style.zoom = ''; p.style.width = '';
+    var h = p.scrollHeight, z = Math.min(MAX / h, grow || 1);
+    if (z < 1 || z > 1.02) {
+      z = Math.floor(z * 1000) / 1000; p.style.width = (W / z) + 'px'; p.style.zoom = String(z);
+      var h2 = p.scrollHeight * z;
+      if (h2 > MAX) { z = Math.floor(z * MAX / h2 * 1000) / 1000; p.style.width = (W / z) + 'px'; p.style.zoom = String(z); }
+    }
+  }
 }
 function downloadPdf(orgId) { showPdf(call('apiPdf', S.token, S.month, orgId)); }
 function downloadPeriodPdf(orgId) { showPdf(call('apiPeriodPdf', S.token, S.year, S.pk, S.pk === 'Y' ? 1 : S.pi, orgId)); }

@@ -518,7 +518,7 @@ function buildPaperHtml(o) {
     if (c.missing && c.missing.length) h += '<p class="n" style="margin-top:6px"><b>' + htmlEsc_(c.label) + ':</b> ' + htmlEsc_(c.missing.join(', ')) + '</p>';
   });
   h += pdfSignHtml_(o);
-  if (pbOn) h += '</div>' + (typeof WARD_FIT_JS_ === 'string' ? WARD_FIT_JS_ : '');
+  if (pbOn) h += '</div>' + (o.fitJs || (typeof WARD_FIT_JS_ === 'string' ? WARD_FIT_JS_ : ''));
   // বাদ-পড়া সংগঠনের তালিকা PDF-এ ছাপা হয় না (ওয়েব পাতায় দেখানো হয়)
   return h + '</body></html>';
 }
